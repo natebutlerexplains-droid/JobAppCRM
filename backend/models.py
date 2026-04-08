@@ -24,6 +24,7 @@ class Database:
         self.connection.execute("PRAGMA journal_mode=WAL")
         self.connection.execute("PRAGMA synchronous=NORMAL")
         self.create_tables()
+        self._migrate_sync_logs_status()
 
     def create_tables(self):
         """Create all database tables."""
@@ -114,10 +115,55 @@ class Database:
             apps_created INTEGER DEFAULT 0,
             errors TEXT,
             status TEXT DEFAULT 'running'
-                CHECK(status IN ('running', 'completed', 'failed')),
+                CHECK(status IN ('running', 'completed', 'failed', 'cancelled')),
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
         """)
+
+    def _sync_logs_allows_cancelled(self) -> bool:
+        cursor = self.connection.execute(
+            "SELECT sql FROM sqlite_master WHERE type='table' AND name='sync_logs'"
+        )
+        row = cursor.fetchone()
+        if not row or not row["sql"]:
+            return True
+        return "cancelled" in row["sql"]
+
+    def _migrate_sync_logs_status(self):
+        if self._sync_logs_allows_cancelled():
+            return
+        try:
+            self.connection.execute("BEGIN")
+            self.connection.execute("""
+            CREATE TABLE sync_logs_new (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                started_at TIMESTAMP NOT NULL,
+                finished_at TIMESTAMP,
+                emails_fetched INTEGER DEFAULT 0,
+                emails_processed INTEGER DEFAULT 0,
+                apps_created INTEGER DEFAULT 0,
+                errors TEXT,
+                status TEXT DEFAULT 'running'
+                    CHECK(status IN ('running', 'completed', 'failed', 'cancelled')),
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+            """)
+            self.connection.execute("""
+            INSERT INTO sync_logs_new (
+                id, started_at, finished_at, emails_fetched, emails_processed,
+                apps_created, errors, status, created_at
+            )
+            SELECT
+                id, started_at, finished_at, emails_fetched, emails_processed,
+                apps_created, errors, status, created_at
+            FROM sync_logs
+            """)
+            self.connection.execute("DROP TABLE sync_logs")
+            self.connection.execute("ALTER TABLE sync_logs_new RENAME TO sync_logs")
+            self.connection.execute("COMMIT")
+        except Exception:
+            self.connection.execute("ROLLBACK")
+            raise
 
         self.connection.commit()
 
@@ -359,10 +405,35 @@ class SyncLog:
         db.commit()
 
     @staticmethod
+    def update_progress(db: Database, log_id: int, emails_fetched: Optional[int] = None,
+                        emails_processed: Optional[int] = None, apps_created: Optional[int] = None,
+                        status: str = "running"):
+        """Update progress for a running sync without setting finished_at."""
+        db.execute(
+            """UPDATE sync_logs
+               SET emails_fetched = COALESCE(?, emails_fetched),
+                   emails_processed = COALESCE(?, emails_processed),
+                   apps_created = COALESCE(?, apps_created),
+                   status = ?
+               WHERE id = ?""",
+            (emails_fetched, emails_processed, apps_created, status, log_id)
+        )
+        db.commit()
+
+    @staticmethod
     def get_latest(db: Database) -> Optional[Dict[str, Any]]:
         """Get the latest sync log entry."""
         cursor = db.execute(
             "SELECT * FROM sync_logs ORDER BY created_at DESC LIMIT 1"
+        )
+        row = cursor.fetchone()
+        return dict(row) if row else None
+
+    @staticmethod
+    def get_running(db: Database) -> Optional[Dict[str, Any]]:
+        """Get the most recent running sync log entry."""
+        cursor = db.execute(
+            "SELECT * FROM sync_logs WHERE status = 'running' ORDER BY created_at DESC LIMIT 1"
         )
         row = cursor.fetchone()
         return dict(row) if row else None

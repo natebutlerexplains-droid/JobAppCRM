@@ -1,8 +1,6 @@
 import json
 import logging
 import os
-import webbrowser
-from pathlib import Path
 from datetime import datetime
 import requests
 from msal import PublicClientApplication
@@ -11,9 +9,12 @@ from config import Config
 
 logger = logging.getLogger(__name__)
 
+# Global device flow state (used between initiate and poll endpoints)
+_pending_device_flow = None
+
 
 class MSGraphAuth:
-    """Handles Microsoft Graph OAuth2 PKCE authentication for personal Outlook accounts."""
+    """Handles Microsoft Graph OAuth2 device code authentication."""
 
     def __init__(self):
         self.app = PublicClientApplication(
@@ -29,7 +30,7 @@ class MSGraphAuth:
         os.makedirs(cache_dir, exist_ok=True)
 
     def _load_cached_token(self) -> dict:
-        """Load the cached refresh token."""
+        """Load the cached token."""
         if os.path.exists(self.token_cache_path):
             try:
                 with open(self.token_cache_path, "r") as f:
@@ -46,12 +47,21 @@ class MSGraphAuth:
         except Exception as e:
             logger.error(f"Failed to save token: {e}")
 
+    def is_authenticated(self) -> bool:
+        """Check if we have a valid cached token."""
+        token = self._load_cached_token()
+        if not token:
+            return False
+        expires_on = token.get("expires_on", 0)
+        if isinstance(expires_on, str):
+            expires_on = int(expires_on)
+        # Token still valid (or has refresh token)
+        return token.get("refresh_token") is not None or expires_on > datetime.now().timestamp()
+
     def get_access_token(self) -> str:
         """Get a valid access token, refreshing if necessary."""
-        # Try to get token from cache first
         cached_token = self._load_cached_token()
 
-        # Try to refresh using the refresh token
         if cached_token.get("refresh_token"):
             try:
                 result = self.app.acquire_token_by_refresh_token(
@@ -66,54 +76,42 @@ class MSGraphAuth:
             except Exception as e:
                 logger.error(f"Error refreshing token: {e}")
 
-        # If refresh failed, need to authenticate interactively
-        logger.info("No valid token found. Starting interactive authentication...")
-        return self._interactive_login()
+        raise Exception("Not authenticated. Please connect your Outlook account first via the Settings page.")
 
-    def _interactive_login(self) -> str:
-        """Start an interactive login flow."""
-        # Start the device flow (since we can't do interactive auth in a headless environment)
-        # For a desktop app, we use the authorization code flow with PKCE
-        result = self.app.acquire_token_interactive(
-            scopes=Config.MS_GRAPH_SCOPE,
-        )
+    def initiate_device_flow(self) -> dict:
+        """Start the device code flow. Returns the flow info to show the user."""
+        global _pending_device_flow
+        flow = self.app.initiate_device_flow(scopes=Config.MS_GRAPH_SCOPE)
+        if "user_code" not in flow:
+            raise Exception(f"Failed to initiate device flow: {flow.get('error_description', 'Unknown error')}")
+        _pending_device_flow = flow
+        logger.info(f"Device flow initiated. Code: {flow['user_code']}, URL: {flow['verification_uri']}")
+        return {
+            "user_code": flow["user_code"],
+            "verification_uri": flow["verification_uri"],
+            "message": flow.get("message", f"Go to {flow['verification_uri']} and enter code {flow['user_code']}"),
+            "expires_in": flow.get("expires_in", 900),
+        }
+
+    def poll_device_flow(self) -> dict:
+        """Poll for device flow completion. Returns status."""
+        global _pending_device_flow
+        if not _pending_device_flow:
+            return {"status": "no_flow", "message": "No active device flow. Please initiate login first."}
+
+        result = self.app.acquire_token_by_device_flow(_pending_device_flow)
 
         if "access_token" in result:
             self._save_token(result)
-            logger.info("Successfully authenticated with Microsoft Graph")
-            return result["access_token"]
+            _pending_device_flow = None
+            logger.info("Device flow authentication successful")
+            return {"status": "success", "message": "Successfully authenticated with Microsoft"}
+        elif result.get("error") == "authorization_pending":
+            return {"status": "pending", "message": "Waiting for you to complete login in the browser..."}
         else:
-            error = result.get("error_description", "Unknown error")
-            raise Exception(f"Authentication failed: {error}")
-
-    def refresh_token_if_needed(self) -> bool:
-        """Check and refresh token if it's about to expire."""
-        try:
-            token = self._load_cached_token()
-            if not token:
-                return False
-
-            # Check if token expires in the next 5 minutes
-            expires_on = token.get("expires_on", 0)
-            if isinstance(expires_on, str):
-                expires_on = int(expires_on)
-
-            current_time = datetime.now().timestamp()
-            if expires_on - current_time < 300:  # Less than 5 minutes
-                # Try to refresh
-                if token.get("refresh_token"):
-                    result = self.app.acquire_token_by_refresh_token(
-                        refresh_token=token["refresh_token"],
-                        scopes=Config.MS_GRAPH_SCOPE,
-                    )
-                    if "access_token" in result:
-                        self._save_token(result)
-                        return True
-                return False
-            return True
-        except Exception as e:
-            logger.error(f"Error checking token expiry: {e}")
-            return False
+            _pending_device_flow = None
+            error = result.get("error_description", result.get("error", "Unknown error"))
+            return {"status": "error", "message": f"Authentication failed: {error}"}
 
 
 class MSGraphAPI:
@@ -123,52 +121,42 @@ class MSGraphAPI:
         self.access_token = access_token
         self.headers = {
             "Authorization": f"Bearer {access_token}",
-            "Prefer": "outlook.body-content-type=text",  # Request plain text body
+            "Prefer": "outlook.body-content-type=text",
             "Content-Type": "application/json",
         }
 
     def get_emails(self, days_back: int = 30, max_results: int = None) -> list:
         """Fetch emails from the past N days from Inbox."""
         emails = []
-        skip_token = None
-        page_count = 0
-        max_pages = None
 
-        # Build the filter for the last N days
         from datetime import datetime, timedelta
-        date_cutoff = (datetime.now() - timedelta(days=days_back)).isoformat()
-        filter_query = f"receivedDateTime ge {date_cutoff}"
+        date_cutoff = (datetime.utcnow() - timedelta(days=days_back)).strftime("%Y-%m-%dT%H:%M:%SZ")
 
-        while True:
-            page_count += 1
-            if max_pages and page_count > max_pages:
-                break
+        # Build initial URL with params
+        url = f"{Config.MS_GRAPH_API_ENDPOINT}/me/mailFolders/inbox/messages"
+        params = {
+            "$filter": f"receivedDateTime ge {date_cutoff}",
+            "$select": "id,subject,from,receivedDateTime,bodyPreview,body",
+            "$orderby": "receivedDateTime desc",
+            "$top": 50,
+        }
 
-            url = f"{Config.MS_GRAPH_API_ENDPOINT}/me/mailFolders/inbox/messages"
-            params = {
-                "$filter": filter_query,
-                "$select": "id,subject,from,receivedDateTime,bodyPreview,body",
-                "$orderby": "receivedDateTime desc",
-                "$top": 50,  # Max 50 per page
-            }
-
-            if skip_token:
-                params["$skiptoken"] = skip_token
-
+        while url:
             try:
-                response = requests.get(url, headers=self.headers, params=params, timeout=30)
+                if params:
+                    response = requests.get(url, headers=self.headers, params=params, timeout=30)
+                    params = None  # Only pass params on first request; nextLink has them baked in
+                else:
+                    response = requests.get(url, headers=self.headers, timeout=30)
 
-                # Handle rate limiting
                 if response.status_code == 429:
                     retry_after = int(response.headers.get("Retry-After", 60))
                     logger.warning(f"Rate limited. Waiting {retry_after} seconds...")
-                    # For now, we'll just log and continue. The sync process will handle retries.
                     return emails
 
                 response.raise_for_status()
                 data = response.json()
 
-                # Extract emails
                 for msg in data.get("value", []):
                     emails.append({
                         "id": msg.get("id"),
@@ -181,10 +169,8 @@ class MSGraphAPI:
                     if max_results and len(emails) >= max_results:
                         return emails
 
-                # Check for next page
-                skip_token = data.get("@odata.nextLink")
-                if not skip_token:
-                    break
+                # nextLink is a full URL — use it directly for the next page
+                url = data.get("@odata.nextLink")
 
             except requests.exceptions.RequestException as e:
                 logger.error(f"Error fetching emails: {e}")
@@ -205,7 +191,7 @@ class MSGraphAPI:
 
 
 def get_authenticated_api() -> MSGraphAPI:
-    """Get an authenticated MS Graph API instance, handling token refresh."""
+    """Get an authenticated MS Graph API instance."""
     auth = MSGraphAuth()
     try:
         access_token = auth.get_access_token()

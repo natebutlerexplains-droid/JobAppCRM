@@ -1,5 +1,6 @@
 import logging
 import os
+import threading
 from datetime import datetime, timedelta
 from flask import Flask, jsonify, request
 from flask_cors import CORS
@@ -33,18 +34,25 @@ db = Database(Config.DATABASE_PATH)
 
 # Initialize scheduler
 scheduler = BackgroundScheduler()
+current_sync = {"cancel_event": None, "log_id": None}
 
 
 # Scheduler functions
 def sync_emails_job():
     """Background job to sync emails."""
     logger.info("Starting scheduled email sync...")
+    cancel_event = threading.Event()
+    current_sync["cancel_event"] = cancel_event
+    current_sync["log_id"] = None
     try:
-        processor = EmailProcessor(db)
+        processor = EmailProcessor(db, cancel_event=cancel_event)
         stats = processor.process_emails(days_back=Config.EMAIL_SYNC_DAYS_BACK)
         logger.info(f"Email sync completed: {stats}")
     except Exception as e:
         logger.error(f"Email sync failed: {e}")
+    finally:
+        current_sync["cancel_event"] = None
+        current_sync["log_id"] = None
 
 
 def check_and_sync_on_startup():
@@ -299,6 +307,14 @@ def get_sync_logs():
 def run_email_sync():
     """Manually trigger an email sync (runs asynchronously)."""
     try:
+        running = SyncLog.get_running(db)
+        if running:
+            return jsonify({
+                "message": "Email sync already running",
+                "status": "running",
+                "sync_log_id": running.get("id"),
+            }), 409
+
         # Use module-level scheduler (reuse instance instead of creating new one per request)
         if not scheduler.running:
             scheduler.start()
@@ -308,6 +324,83 @@ def run_email_sync():
     except Exception as e:
         logger.error(f"Error running email sync: {e}")
         return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/cancel-email-sync", methods=["POST"])
+def cancel_email_sync():
+    """Cancel a running email sync."""
+    try:
+        running = SyncLog.get_running(db)
+        if not running or not current_sync.get("cancel_event"):
+            return jsonify({"message": "No running sync to cancel", "status": "idle"}), 409
+
+        current_sync["cancel_event"].set()
+        return jsonify({"message": "Cancel requested", "status": "cancelling"}), 202
+    except Exception as e:
+        logger.error(f"Error cancelling email sync: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/auth/status", methods=["GET"])
+def auth_status():
+    """Check if Outlook is connected."""
+    try:
+        from auth import MSGraphAuth
+        auth = MSGraphAuth()
+        return jsonify({"authenticated": auth.is_authenticated()}), 200
+    except Exception as e:
+        return jsonify({"authenticated": False, "error": str(e)}), 200
+
+
+@app.route("/api/gemini/health", methods=["GET"])
+def gemini_health():
+    """Check Gemini API health with a lightweight classification call."""
+    try:
+        from gemini_classifier import GeminiClassifier
+        classifier = GeminiClassifier()
+        result = classifier.classify_email(
+            subject="Application received for Software Engineer",
+            body="Thanks for applying to Acme Corp for the Software Engineer role.",
+            sender="jobs@acme.example"
+        )
+        return jsonify({
+            "ok": True,
+            "model": Config.GEMINI_MODEL,
+            "result": result,
+        }), 200
+    except Exception as e:
+        logger.error(f"Gemini health check failed: {e}")
+        return jsonify({
+            "ok": False,
+            "model": Config.GEMINI_MODEL,
+            "error": str(e),
+        }), 200
+
+
+@app.route("/api/auth/initiate", methods=["POST"])
+def auth_initiate():
+    """Start the device code login flow."""
+    try:
+        from auth import MSGraphAuth
+        auth = MSGraphAuth()
+        flow_info = auth.initiate_device_flow()
+        return jsonify(flow_info), 200
+    except Exception as e:
+        logger.error(f"Error initiating auth: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/auth/poll", methods=["POST"])
+def auth_poll():
+    """Poll for device code login completion."""
+    try:
+        from auth import MSGraphAuth
+        auth = MSGraphAuth()
+        result = auth.poll_device_flow()
+        return jsonify(result), 200
+    except Exception as e:
+        logger.error(f"Error polling auth: {e}")
+        return jsonify({"status": "error", "message": str(e)}), 500
 
 
 @app.route("/health", methods=["GET"])

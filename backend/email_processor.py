@@ -4,6 +4,7 @@ from datetime import datetime, timedelta
 from typing import List, Dict, Any
 
 from models import Database, Application, Email, StageSuggestion, SyncLog
+from config import Config
 from auth import get_authenticated_api
 from gemini_classifier import GeminiClassifier
 from application_linker import ApplicationLinker
@@ -14,10 +15,11 @@ logger = logging.getLogger(__name__)
 class EmailProcessor:
     """Processes emails: fetches, classifies, and links them to applications."""
 
-    def __init__(self, db: Database):
+    def __init__(self, db: Database, cancel_event=None):
         self.db = db
         self.classifier = GeminiClassifier()
         self.linker = ApplicationLinker(db, self.classifier)
+        self.cancel_event = cancel_event
 
     def process_emails(self, days_back: int = 30, max_retries: int = 3) -> Dict[str, Any]:
         """
@@ -35,20 +37,48 @@ class EmailProcessor:
             "errors": [],
             "new_suggestions": 0,
         }
+        progress_every = max(1, Config.SYNC_PROGRESS_EVERY)
 
         try:
             # Fetch emails from MS Graph with retry logic
             emails = self._fetch_emails_with_retry(days_back, max_retries)
             stats["emails_fetched"] = len(emails)
             logger.info(f"Fetched {len(emails)} emails from Outlook")
+            SyncLog.update_progress(
+                self.db,
+                sync_log_id,
+                emails_fetched=stats["emails_fetched"],
+                status="running",
+            )
 
             # Process each email
             for email in emails:
+                if self.cancel_event and self.cancel_event.is_set():
+                    stats["errors"].append("Cancelled by user")
+                    SyncLog.update(
+                        self.db,
+                        sync_log_id,
+                        emails_fetched=stats["emails_fetched"],
+                        emails_processed=stats["emails_processed"],
+                        apps_created=stats["apps_created"],
+                        status="cancelled",
+                        errors=stats["errors"],
+                    )
+                    return stats
                 try:
                     self._process_single_email(email, stats)
                 except Exception as e:
                     logger.error(f"Error processing email {email.get('id')}: {e}")
                     stats["errors"].append(str(e))
+                finally:
+                    if stats["emails_processed"] > 0 and stats["emails_processed"] % progress_every == 0:
+                        SyncLog.update_progress(
+                            self.db,
+                            sync_log_id,
+                            emails_processed=stats["emails_processed"],
+                            apps_created=stats["apps_created"],
+                            status="running",
+                        )
 
             # Update sync log
             SyncLog.update(

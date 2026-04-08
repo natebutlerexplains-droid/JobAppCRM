@@ -13,9 +13,12 @@ class Config:
 
     # Microsoft Graph API
     MS_GRAPH_CLIENT_ID = os.getenv("MS_GRAPH_CLIENT_ID")
+    MS_GRAPH_CLIENT_SECRET = os.getenv("MS_GRAPH_CLIENT_SECRET")
+    MS_GRAPH_USERNAME = os.getenv("MS_GRAPH_USERNAME")
+    MS_GRAPH_PASSWORD = os.getenv("MS_GRAPH_PASSWORD")
     MS_GRAPH_AUTHORITY = "https://login.microsoftonline.com/consumers"
     MS_GRAPH_SCOPE = ["Mail.Read"]
-    MS_GRAPH_REDIRECT_URI = "http://localhost:8400"
+    MS_GRAPH_REDIRECT_URI = "http://localhost:5001"
     MS_GRAPH_API_ENDPOINT = "https://graph.microsoft.com/v1.0"
 
     # Token storage
@@ -23,7 +26,7 @@ class Config:
 
     # Google Gemini API
     GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
-    GEMINI_MODEL = "gemini-1.5-flash"
+    GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-1.5-flash")
 
     # Email sync settings
     EMAIL_SYNC_DAYS_BACK = int(os.getenv("EMAIL_SYNC_DAYS_BACK", "30"))
@@ -33,6 +36,7 @@ class Config:
     SYNC_SCHEDULE_HOUR = 2  # 2 AM daily
     SYNC_SCHEDULE_MINUTE = 0
     STARTUP_SYNC_THRESHOLD_HOURS = 4  # Run on startup if >4 hours since last sync
+    SYNC_PROGRESS_EVERY = int(os.getenv("SYNC_PROGRESS_EVERY", "1"))
 
     # Flask settings
     FLASK_ENV = os.getenv("FLASK_ENV", "development")

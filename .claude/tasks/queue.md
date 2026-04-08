@@ -1,7 +1,54 @@
 # Task Queue
 
+## Task Numbering Convention
+
+- **Sequential Naming:** TASK-001, TASK-002, ..., TASK-NNN (no reuse)
+- **Statuses:** `queued` (waiting to start), `in-progress` (actively being worked on), `completed` (done and verified)
+- **Requirements:** Any agent starting work MUST claim a task ID first by updating this file
+- **Concurrency:** Parallel tasks are allowed — each gets a unique ID and separate log entry in AGENT_LOG.md
+- **Agent Logging:** Every AGENT_LOG.md entry must include task ID: `[YYYY-MM-DD HH:MM] AGENT-TYPE action | task: TASK-NNN | detail`
+
+---
+
+## Current In-Progress Task
+
+(No tasks currently in progress — queue is empty)
+
+---
+
+## Completed Tasks ✅
+
+## TASK-011: MS Graph OAuth + Email Sync Integration
+- **Status:** completed
+- **Priority:** high (blocking feature)
+- **Completed by:** CODEX
+- **Files modified:**
+  - backend/auth.py (device code flow, pagination fix using @odata.nextLink)
+  - backend/app.py (auth endpoints: /api/auth/initiate, /api/auth/poll, /api/cancel-email-sync, /api/gemini/health)
+  - backend/email_processor.py (per-email progress updates, cancel support, configurable progress interval)
+  - backend/models.py (SyncLog.update_progress method, cancelled status support, migration)
+  - backend/config.py (MS Graph authority for personal accounts)
+  - frontend/src/Settings.jsx (Outlook connect UI, device code display, sync progress with ETA, cancel button, Gemini Health panel)
+  - frontend/src/api.js (new endpoints, configurable VITE_API_BASE)
+  - .env / .env.example (GEMINI_MODEL, SYNC_PROGRESS_EVERY, VITE_API_BASE)
+- **What was implemented:**
+  - Microsoft Graph device code authentication (personal outlook.com accounts)
+  - Email fetching with correct pagination (@odata.nextLink handling)
+  - Per-email sync progress updates with ETA calculation
+  - Cancel sync support (backend + UI)
+  - Gemini API health check endpoint
+  - Configurable Gemini model and sync progress interval
+  - Frontend API base URL configurable via environment
+- **Acceptance Criteria:** ✅ All met
+  - Device code flow working with user_code display
+  - Email pagination correct (using full nextLink URLs)
+  - Sync progress displayed with ETA
+  - Cancel button functional
+  - Gemini health check working
+  - All config values exposed via .env
+
 ## TASK-001: Fix known backend bugs
-- **Status:** queued
+- **Status:** completed
 - **Priority:** high
 - **Files to modify:** backend/models.py, backend/app.py, tests/conftest.py
 - **Spec:**

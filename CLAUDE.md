@@ -5,6 +5,21 @@
 
 ---
 
+## New Agent Protocol (Codex, External Agents, New Sessions)
+
+**Any agent joining this project MUST orient themselves before writing code.**
+
+Read in this order:
+1. **This file (CLAUDE.md)** — architecture, three-role structure, workflow rules
+2. **[.claude/tasks/queue.md](.claude/tasks/queue.md)** — active task registry with specs and status
+3. **[AGENT_LOG.md](AGENT_LOG.md)** — recent activity (last 10 entries show what was just completed)
+
+**Then:** Claim or create a task. Check `.claude/tasks/queue.md` for the numbering convention and next available TASK-NNN.
+
+**No work without a task ID.** Every action must be tied to a task spec.
+
+---
+
 ## Project Purpose
 A personal, fully local job application CRM that tracks applications, auto-links emails from Outlook, classifies them with AI, and suggests pipeline stage changes. Designed to run on your machine with zero external hosting or persistent cloud state.
 

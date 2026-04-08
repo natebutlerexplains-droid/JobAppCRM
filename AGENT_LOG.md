@@ -2,9 +2,18 @@
 
 Append-only log of all agent activity. Records who did what and when, so agents can see recent context.
 
-**Format:**
+**⚠️ Format enforcement:** Every entry MUST include a task ID. Entries without a task ID are non-compliant and will be rejected.
+
+**Required Format:**
 ```
-[YYYY-MM-DD HH:MM] [AGENT-TYPE] [status] | [details]
+[YYYY-MM-DD HH:MM] [AGENT-TYPE] [action] | task: TASK-NNN | [details]
+```
+
+**Example entries:**
+```
+[2026-04-08 17:15] CLAUDE-DEV starting | task: TASK-001 | fixing backend bugs
+[2026-04-08 17:18] CLAUDE-DEV finished | task: TASK-001 | files: backend/models.py, tests/conftest.py | status: COMPLETE
+[2026-04-08 18:30] CODEX finishing | task: TASK-011 | branch: codex/ms-graph-oauth | ready for PM review
 ```
 
 **Agent types:**
@@ -38,3 +47,5 @@ Starting fresh — infrastructure setup complete at 2026-04-08 14:30 UTC.
 [2026-04-08 17:36] CLAUDE-DEV finished | task: TASK-009 | files: setup.sh | status: COMPLETE | one-command installer with prereq checks, env setup, and API key guidance
 [2026-04-08 17:37] CLAUDE-DEV starting | task: TASK-010 (README)
 [2026-04-08 17:38] CLAUDE-DEV finished | task: TASK-010 | files: README.md | status: COMPLETE | comprehensive guide covering setup, API keys, running the app, architecture, troubleshooting
+[2026-04-08 18:45] CLAUDE-DEV working | task: TASK-011 | infrastructure: added CONTRACTOR_BRIEF.md, updated CLAUDE.md with New Agent Protocol, updated AGENT_LOG.md format enforcement
+[2026-04-08 19:30] CODEX finished | task: TASK-011 | files: backend/auth.py, backend/app.py, backend/email_processor.py, backend/models.py, backend/config.py, frontend/src/Settings.jsx, frontend/src/api.js, .env.example | status: COMPLETE | pagination fix (@odata.nextLink), per-email progress updates, cancel sync, Gemini health check, configurable model/progress interval

@@ -1,6 +1,6 @@
 import axios from 'axios'
 
-const API_BASE = '/api'
+const API_BASE = import.meta.env.VITE_API_BASE || '/api'
 
 const api = axios.create({
   baseURL: API_BASE,
@@ -33,5 +33,9 @@ export const linkEmail = (emailId, appId) => api.patch(`/emails/${emailId}/link`
 // Sync Logs
 export const getSyncLogs = (limit = 10) => api.get(`/sync-logs?limit=${limit}`)
 export const runEmailSync = () => api.post('/run-email-sync')
+export const cancelEmailSync = () => api.post('/cancel-email-sync')
+
+// Gemini Health
+export const getGeminiHealth = () => api.get('/gemini/health')
 
 export default api
