@@ -26,15 +26,72 @@
 
 ## Current In-Progress Task
 
-### TASK-014: Performance profiling and optimization
-- **Status:** in-progress (CEO decision: move to Phase 4 focus)
-- **Priority:** medium
+### TASK-021: Email Classification Tuning & Metrics
+- **Status:** in-progress (CEO decision: prioritize email quality validation)
+- **Priority:** high (blocks feature work until 90% accuracy achieved)
 - **Assigned to:** CLAUDE-DEV
-- **Started:** 2026-04-09 15:30 UTC
+- **Started:** 2026-04-08 16:30 UTC
+- **CEO Approval:** Yes (pause TASK-018/019, test against real environment)
 
 ---
 
 ## Queued Tasks (Next to Implement)
+
+### TASK-021: Email Classification Tuning & Metrics
+- **Status:** queued
+- **Priority:** high (CEO blocks all feature work until this is complete)
+- **Files:** backend/email_processor.py, backend/gemini_classifier.py, backend/models.py, tests/test_classification.py, docs/CLASSIFICATION_METRICS.md
+- **Spec:**
+  - **Goal:** Achieve 90% detection and mapping accuracy on real Outlook emails
+  - **Phase 1: Instrumentation**
+    - Add confidence logging to gemini_classifier.py — log Gemini score + classification reason for every email
+    - Update SyncLog to store per-email metrics (confidence, classification, link_target, accuracy)
+    - Add config knobs in .env:
+      - `GEMINI_CONFIDENCE_THRESHOLD=0.7` (reject low-confidence classifications)
+      - `EMAIL_CLASSIFICATION_LOG_LEVEL=debug` (verbose logging for tuning)
+  - **Phase 2: Test Against Real Environment**
+    - Run a manual sync of last 50 emails from user's real Outlook inbox
+    - For each email: log classification + confidence score
+    - Manually verify 50 emails and rate accuracy (is it the right type? did it link to the right app?)
+    - Calculate baseline accuracy (% of emails correctly classified and linked)
+  - **Phase 3: Tuning & Iteration**
+    - If baseline <90%: identify failure modes (false positives, false negatives, weak linking)
+    - Adjust thresholds: try `GEMINI_CONFIDENCE_THRESHOLD=0.8`, re-test
+    - If still low: update Gemini prompt to be more specific (e.g., "classify as 'offer' only if salary explicitly mentioned")
+    - Re-test until ≥90% achieved
+  - **Phase 4: Documentation**
+    - Create CLASSIFICATION_METRICS.md with:
+      - Baseline accuracy report (50-email sample)
+      - Tuning decisions made and why
+      - Confidence score distribution (histogram)
+      - Known failure modes (e.g., "10% false positives on HR emails")
+      - Recommendations for production (thresholds, prompt improvements)
+- **Acceptance Criteria:**
+  - Confidence scores logged for every email in real sync
+  - Test run against 50+ real emails from user's Outlook inbox
+  - Accuracy measured: % emails correctly classified AND correctly linked to app
+  - Baseline accuracy ≥90% (or documented with improvement plan if <90%)
+  - CLASSIFICATION_METRICS.md documents findings + tuning decisions
+  - Config knobs in .env allow threshold adjustment without code changes
+  - All changes tested (no regression in existing tests)
+
+---
+
+### TASK-018: Export and reporting features
+- **Status:** deferred (paused per CEO decision 2026-04-08)
+- **Reason:** Pause all feature work until email classification accuracy validated at 90%
+- **Will resume:** After TASK-021 complete + CEO approval
+- **Priority:** low (user-facing but not critical to core pipeline)
+
+---
+
+### TASK-019: Keyboard shortcuts and accessibility
+- **Status:** deferred (paused per CEO decision 2026-04-08)
+- **Reason:** Pause all feature work until email classification accuracy validated at 90%
+- **Will resume:** After TASK-021 complete + CEO approval
+- **Priority:** low (nice-to-have, not blocking)
+
+---
 
 ### TASK-014: Performance profiling and optimization
 - **Status:** queued
