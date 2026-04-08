@@ -20,14 +20,39 @@ logging.basicConfig(
 # Initialize Flask app
 app = Flask(__name__)
 app.config["JSON_SORT_KEYS"] = False
+app.config["MAX_CONTENT_LENGTH"] = 16 * 1024 * 1024  # 16MB max
+
+# CORS: Only allow localhost in dev
 CORS(app, resources={
     r"/api/*": {
-        "origins": ["http://localhost:3000", "http://localhost:3001", "http://127.0.0.1:3000", "http://127.0.0.1:3001"],
+        "origins": [
+            "http://localhost:3000",
+            "http://localhost:3001",
+            "http://127.0.0.1:3000",
+            "http://127.0.0.1:3001"
+        ],
         "methods": ["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
         "allow_headers": ["Content-Type"],
         "supports_credentials": True
     }
 })
+
+# Security: Add response headers after each request
+@app.after_request
+def add_security_headers(response):
+    """Add security headers to all responses."""
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["X-XSS-Protection"] = "1; mode=block"
+    response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+    response.headers["Content-Security-Policy"] = (
+        "default-src 'self'; "
+        "script-src 'self'; "
+        "style-src 'self' 'unsafe-inline'; "
+        "img-src 'self' data:; "
+        "font-src 'self'"
+    )
+    return response
 
 # Initialize database
 db = Database(Config.DATABASE_PATH)
@@ -231,22 +256,27 @@ def get_applications():
 def create_application():
     """Create a new application."""
     try:
-        data = request.json
-        required = ["company_name", "job_title", "date_submitted"]
-        if not all(k in data for k in required):
-            return jsonify({"error": f"Missing required fields: {required}"}), 400
+        data = request.json or {}
+        validate_required_fields(data, ["company_name", "job_title", "date_submitted"])
+
+        # Sanitize inputs
+        company_name = sanitize_text(data["company_name"], 255)
+        job_title = sanitize_text(data["job_title"], 255)
+        date_submitted = sanitize_text(data["date_submitted"], 50)
 
         app_id = Application.create(
             db,
-            company_name=data["company_name"],
-            job_title=data["job_title"],
-            date_submitted=data["date_submitted"],
+            company_name=company_name,
+            job_title=job_title,
+            date_submitted=date_submitted,
             company_domain=data.get("company_domain"),
             job_url=data.get("job_url"),
         )
 
         app = Application.get_by_id(db, app_id)
         return jsonify(app), 201
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
     except Exception as e:
         logger.error(f"Error creating application: {e}")
         return jsonify({"error": str(e)}), 500
@@ -299,18 +329,19 @@ def get_application(app_id):
 def update_application(app_id):
     """Update an application."""
     try:
-        data = request.json
-        if not data:
-            return jsonify({"error": "No data provided"}), 400
+        data = request.json or {}
 
         # Update status if provided
-        if "status" in data:
+        if "status" in data and data["status"]:
+            validate_status(data["status"])
             Application.update_status(db, app_id, data["status"])
 
         app = Application.get_by_id(db, app_id)
         if not app:
             return jsonify({"error": "Application not found"}), 404
         return jsonify(app), 200
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
     except Exception as e:
         logger.error(f"Error updating application: {e}")
         return jsonify({"error": str(e)}), 500
@@ -355,21 +386,21 @@ def create_interaction(app_id):
     """Create an interaction for an application."""
     try:
         from models import Interaction
-        data = request.json
-        required = ["type"]
-        if not all(k in data for k in required):
-            return jsonify({"error": f"Missing required fields: {required}"}), 400
+        data = request.json or {}
+        validate_required_fields(data, ["type"])
 
         interaction_id = Interaction.create(
             db,
             app_id=app_id,
-            type_=data["type"],
+            type_=sanitize_text(data["type"], 100),
             content=data.get("content"),
             occurred_at=data.get("occurred_at"),
             suggested_stage_change=data.get("suggested_stage_change"),
         )
 
         return jsonify({"id": interaction_id, "message": "Interaction created"}), 201
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
     except Exception as e:
         logger.error(f"Error creating interaction: {e}")
         return jsonify({"error": str(e)}), 500
@@ -401,8 +432,12 @@ def get_stage_suggestions():
 def update_stage_suggestion(suggestion_id):
     """Confirm or dismiss a stage suggestion."""
     try:
-        data = request.json
+        data = request.json or {}
+        validate_required_fields(data, ["action"])
         action = data.get("action")
+
+        if action not in ["confirm", "dismiss"]:
+            raise ValueError("action must be 'confirm' or 'dismiss'")
 
         if action == "confirm":
             app_id = data.get("app_id")
@@ -413,8 +448,8 @@ def update_stage_suggestion(suggestion_id):
         elif action == "dismiss":
             StageSuggestion.dismiss(db, suggestion_id)
             return jsonify({"message": "Suggestion dismissed"}), 200
-        else:
-            return jsonify({"error": "Invalid action"}), 400
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
     except Exception as e:
         logger.error(f"Error updating suggestion: {e}")
         return jsonify({"error": str(e)}), 500
@@ -435,13 +470,17 @@ def get_unlinked_emails():
 def link_email(email_id):
     """Manually link an email to an application."""
     try:
-        data = request.json
+        data = request.json or {}
+        validate_required_fields(data, ["app_id"])
+
         app_id = data.get("app_id")
-        if not app_id:
-            return jsonify({"error": "app_id required"}), 400
+        if not isinstance(app_id, int) or app_id <= 0:
+            raise ValueError("app_id must be a positive integer")
 
         Email.link_to_application(db, email_id, app_id)
         return jsonify({"message": "Email linked to application"}), 200
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
     except Exception as e:
         logger.error(f"Error linking email: {e}")
         return jsonify({"error": str(e)}), 500
@@ -555,11 +594,13 @@ def set_sync_schedule():
     """Update the email sync schedule."""
     try:
         from models import AppConfig
-        data = request.json
+        data = request.json or {}
+        validate_required_fields(data, ["schedule"])
         schedule = data.get("schedule")
 
-        if not schedule:
-            return jsonify({"error": "schedule is required"}), 400
+        allowed_schedules = ["daily", "every_4_hours", "manual_only"]
+        if schedule not in allowed_schedules:
+            raise ValueError(f"schedule must be one of: {', '.join(allowed_schedules)}")
 
         AppConfig.set_sync_schedule(db, schedule)
 
@@ -620,6 +661,34 @@ def not_found(e):
 def internal_error(e):
     logger.error(f"Internal server error: {e}")
     return jsonify({"error": "Internal server error"}), 500
+
+
+def validate_required_fields(data, required_fields):
+    """Validate that all required fields are present."""
+    missing = [f for f in required_fields if f not in data]
+    if missing:
+        raise ValueError(f"Missing required fields: {', '.join(missing)}")
+    return True
+
+
+def validate_status(status):
+    """Validate application status."""
+    allowed = ["Submitted", "More Info Required", "Interview Started", "Denied", "Offered"]
+    if status not in allowed:
+        raise ValueError(f"Invalid status. Must be one of: {', '.join(allowed)}")
+
+
+def sanitize_text(text, max_length=255):
+    """Sanitize and validate text input."""
+    if not isinstance(text, str) or not text.strip():
+        raise ValueError("Text field cannot be empty")
+    text = text.strip()
+    if len(text) > max_length:
+        raise ValueError(f"Text exceeds maximum length of {max_length}")
+    # Check for suspicious characters
+    if not all(c.isprintable() or c.isspace() for c in text):
+        raise ValueError("Text contains non-printable characters")
+    return text
 
 
 # App initialization
