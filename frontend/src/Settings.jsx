@@ -13,16 +13,36 @@ export function Settings() {
   const [authStatus, setAuthStatus] = useState(null) // null = unknown, true = connected, false = not connected
   const [deviceFlow, setDeviceFlow] = useState(null) // { user_code, verification_uri, message }
   const [connectingOutlook, setConnectingOutlook] = useState(false)
+  const [scheduleConfig, setScheduleConfig] = useState(null)
+  const [selectedSchedule, setSelectedSchedule] = useState(null)
+  const [updatingSchedule, setUpdatingSchedule] = useState(false)
+  const [nextSyncCountdown, setNextSyncCountdown] = useState(null)
   const pollIntervalRef = useRef(null)
+  const countdownIntervalRef = useRef(null)
 
   useEffect(() => {
     loadSyncLogs()
     checkAuthStatus()
     checkGeminiHealth()
+    loadSyncSchedule()
     return () => {
       if (pollIntervalRef.current) clearInterval(pollIntervalRef.current)
+      if (countdownIntervalRef.current) clearInterval(countdownIntervalRef.current)
     }
   }, [])
+
+  useEffect(() => {
+    // Update countdown timer every second
+    if (scheduleConfig?.next_sync_time && selectedSchedule !== 'manual_only') {
+      countdownIntervalRef.current = setInterval(() => {
+        updateCountdown()
+      }, 1000)
+      updateCountdown()
+      return () => {
+        if (countdownIntervalRef.current) clearInterval(countdownIntervalRef.current)
+      }
+    }
+  }, [scheduleConfig?.next_sync_time, selectedSchedule])
 
   const checkAuthStatus = async () => {
     try {
@@ -30,6 +50,56 @@ export function Settings() {
       setAuthStatus(res.data.authenticated)
     } catch (err) {
       setAuthStatus(false)
+    }
+  }
+
+  const loadSyncSchedule = async () => {
+    try {
+      const res = await axios.get('/api/settings/sync-schedule')
+      setScheduleConfig(res.data)
+      setSelectedSchedule(res.data.schedule)
+    } catch (err) {
+      console.error('Failed to load sync schedule:', err)
+    }
+  }
+
+  const updateCountdown = () => {
+    if (!scheduleConfig?.next_sync_time) {
+      setNextSyncCountdown(null)
+      return
+    }
+
+    const nextTime = new Date(scheduleConfig.next_sync_time)
+    const now = new Date()
+    const diff = nextTime - now
+
+    if (diff <= 0) {
+      setNextSyncCountdown('Next sync starting soon...')
+      return
+    }
+
+    const hours = Math.floor(diff / (1000 * 60 * 60))
+    const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60))
+    const seconds = Math.floor((diff % (1000 * 60)) / 1000)
+
+    setNextSyncCountdown(`${hours}h ${minutes}m ${seconds}s`)
+  }
+
+  const handleScheduleChange = async (newSchedule) => {
+    setUpdatingSchedule(true)
+    setError(null)
+    try {
+      const res = await axios.post('/api/settings/sync-schedule', {
+        schedule: newSchedule
+      })
+      setScheduleConfig(res.data)
+      setSelectedSchedule(newSchedule)
+      setSyncStatus(`Schedule updated to: ${newSchedule}`)
+    } catch (err) {
+      setError(err.response?.data?.error || err.message || 'Failed to update schedule')
+      setSelectedSchedule(scheduleConfig?.schedule)
+    } finally {
+      setUpdatingSchedule(false)
     }
   }
 
@@ -305,6 +375,38 @@ export function Settings() {
             <p className="text-sm text-muted-foreground">Last Sync</p>
             <p className="text-lg font-medium text-foreground mt-1">{getLastSyncTime()}</p>
           </div>
+
+          {/* Sync Schedule */}
+          {scheduleConfig && (
+            <div className="space-y-3">
+              <div>
+                <label htmlFor="schedule" className="text-sm text-muted-foreground block mb-2">
+                  Sync Schedule
+                </label>
+                <select
+                  id="schedule"
+                  value={selectedSchedule || ''}
+                  onChange={(e) => handleScheduleChange(e.target.value)}
+                  disabled={updatingSchedule}
+                  className="w-full px-3 py-2 border rounded bg-background text-foreground disabled:opacity-50"
+                >
+                  {scheduleConfig.available_schedules?.map(schedule => (
+                    <option key={schedule} value={schedule}>
+                      {schedule === 'daily' ? 'Daily at 2 AM' :
+                       schedule === 'every_4_hours' ? 'Every 4 Hours' :
+                       'Manual Only'}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {selectedSchedule !== 'manual_only' && nextSyncCountdown && (
+                <div className="p-3 bg-blue-50 border border-blue-200 rounded text-sm text-blue-900">
+                  Next sync: {nextSyncCountdown}
+                </div>
+              )}
+            </div>
+          )}
 
           {error && (
             <div className="p-3 bg-destructive/10 border border-destructive text-destructive rounded text-sm">

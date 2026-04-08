@@ -74,18 +74,101 @@ def check_and_sync_on_startup():
 
 
 # Initialize scheduler
+def calculate_next_sync_time(schedule):
+    """Calculate the next sync time based on schedule."""
+    from models import AppConfig
+
+    now = datetime.now()
+
+    if schedule == "daily":
+        # Next sync at 2 AM
+        next_time = now.replace(hour=Config.SYNC_SCHEDULE_HOUR, minute=Config.SYNC_SCHEDULE_MINUTE, second=0, microsecond=0)
+        if next_time <= now:
+            next_time += timedelta(days=1)
+
+    elif schedule == "every_4_hours":
+        # Next sync at 2, 6, 10, 14, 18, or 22 o'clock
+        hours = [2, 6, 10, 14, 18, 22]
+        next_time = None
+        for hour in hours:
+            candidate = now.replace(hour=hour, minute=0, second=0, microsecond=0)
+            if candidate > now:
+                next_time = candidate
+                break
+        if not next_time:
+            # All times passed today, next is 2 AM tomorrow
+            next_time = (now + timedelta(days=1)).replace(hour=2, minute=0, second=0, microsecond=0)
+
+    elif schedule == "manual_only":
+        next_time = None
+
+    return next_time.isoformat() if next_time else None
+
+
+def update_scheduler_for_schedule(schedule):
+    """Update APScheduler jobs based on selected schedule."""
+    try:
+        from models import AppConfig
+
+        # Remove existing sync jobs
+        for job_id in [f"sync_every_4h_{i}" for i in range(6)]:
+            try:
+                scheduler.remove_job(job_id)
+            except:
+                pass
+        try:
+            scheduler.remove_job("daily_email_sync")
+        except:
+            pass
+
+        if schedule == "daily":
+            scheduler.add_job(
+                sync_emails_job,
+                trigger=CronTrigger(hour=Config.SYNC_SCHEDULE_HOUR, minute=Config.SYNC_SCHEDULE_MINUTE),
+                id="daily_email_sync",
+                name="Daily email sync at 2 AM",
+                replace_existing=True,
+            )
+            logger.info("Scheduler updated: daily sync at 2 AM")
+
+        elif schedule == "every_4_hours":
+            # Add jobs at 2 AM, 6 AM, 10 AM, 2 PM, 6 PM, 10 PM
+            hours = [2, 6, 10, 14, 18, 22]
+            for i, hour in enumerate(hours):
+                scheduler.add_job(
+                    sync_emails_job,
+                    trigger=CronTrigger(hour=hour, minute=0),
+                    id=f"sync_every_4h_{i}",
+                    name=f"Email sync at {hour:02d}:00",
+                    replace_existing=True,
+                )
+            logger.info("Scheduler updated: sync every 4 hours")
+
+        elif schedule == "manual_only":
+            logger.info("Scheduler updated: manual sync only (no scheduled jobs)")
+
+        # Calculate and store next sync time
+        next_sync_time = calculate_next_sync_time(schedule)
+        if next_sync_time:
+            AppConfig.set_next_sync_time(db, next_sync_time)
+            logger.info(f"Next sync scheduled for: {next_sync_time}")
+
+    except Exception as e:
+        logger.error(f"Error updating scheduler: {e}")
+        raise
+
+
 def init_scheduler():
     """Initialize APScheduler jobs."""
-    # Add the 2 AM daily cron job
-    scheduler.add_job(
-        sync_emails_job,
-        trigger=CronTrigger(hour=Config.SYNC_SCHEDULE_HOUR, minute=Config.SYNC_SCHEDULE_MINUTE),
-        id="daily_email_sync",
-        name="Daily email sync at 2 AM",
-        replace_existing=True,
-    )
+    from models import AppConfig
+
+    # Get the configured schedule from config table
+    schedule = AppConfig.get_sync_schedule(db)
+
+    # Initialize based on configured schedule
+    update_scheduler_for_schedule(schedule)
     scheduler.start()
-    logger.info("APScheduler initialized with daily 2 AM sync job")
+    logger.info(f"APScheduler initialized with schedule: {schedule}")
 
 
 # API Routes
@@ -375,6 +458,51 @@ def gemini_health():
             "model": Config.GEMINI_MODEL,
             "error": str(e),
         }), 200
+
+
+@app.route("/api/settings/sync-schedule", methods=["GET"])
+def get_sync_schedule():
+    """Get the current email sync schedule."""
+    try:
+        from models import AppConfig
+        schedule = AppConfig.get_sync_schedule(db)
+        next_sync = AppConfig.get_next_sync_time(db)
+        return jsonify({
+            "schedule": schedule,
+            "next_sync_time": next_sync,
+            "available_schedules": AppConfig.SCHEDULE_OPTIONS,
+        }), 200
+    except Exception as e:
+        logger.error(f"Error getting sync schedule: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/settings/sync-schedule", methods=["POST"])
+def set_sync_schedule():
+    """Update the email sync schedule."""
+    try:
+        from models import AppConfig
+        data = request.json
+        schedule = data.get("schedule")
+
+        if not schedule:
+            return jsonify({"error": "schedule is required"}), 400
+
+        AppConfig.set_sync_schedule(db, schedule)
+
+        # Update APScheduler jobs based on new schedule
+        update_scheduler_for_schedule(schedule)
+
+        logger.info(f"Sync schedule updated to: {schedule}")
+        return jsonify({
+            "schedule": schedule,
+            "message": f"Sync schedule updated to {schedule}"
+        }), 200
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
+    except Exception as e:
+        logger.error(f"Error setting sync schedule: {e}")
+        return jsonify({"error": str(e)}), 500
 
 
 @app.route("/api/auth/initiate", methods=["POST"])

@@ -120,6 +120,17 @@ class Database:
         )
         """)
 
+        # CONFIG table (key-value store for app settings)
+        cursor.execute("""
+        CREATE TABLE IF NOT EXISTS config (
+            key TEXT PRIMARY KEY,
+            value TEXT NOT NULL,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+        """)
+
+        self.connection.commit()
+
     def _sync_logs_allows_cancelled(self) -> bool:
         cursor = self.connection.execute(
             "SELECT sql FROM sqlite_master WHERE type='table' AND name='sync_logs'"
@@ -446,3 +457,62 @@ class SyncLog:
             (limit,)
         )
         return [dict(row) for row in cursor.fetchall()]
+
+
+class AppConfig:
+    """Application configuration (key-value store)."""
+
+    # Default sync schedule: daily at 2 AM
+    DEFAULT_SCHEDULE = "daily"  # "daily", "every_4_hours", "manual_only"
+    SCHEDULE_OPTIONS = ["daily", "every_4_hours", "manual_only"]
+
+    @staticmethod
+    def get(db: Database, key: str, default: str = None) -> str:
+        """Get a config value."""
+        cursor = db.execute(
+            "SELECT value FROM config WHERE key = ?",
+            (key,)
+        )
+        row = cursor.fetchone()
+        return row["value"] if row else default
+
+    @staticmethod
+    def set(db: Database, key: str, value: str):
+        """Set a config value."""
+        cursor = db.execute(
+            "SELECT value FROM config WHERE key = ?",
+            (key,)
+        )
+        if cursor.fetchone():
+            db.execute(
+                "UPDATE config SET value = ?, updated_at = CURRENT_TIMESTAMP WHERE key = ?",
+                (value, key)
+            )
+        else:
+            db.execute(
+                "INSERT INTO config (key, value) VALUES (?, ?)",
+                (key, value)
+            )
+        db.commit()
+
+    @staticmethod
+    def get_sync_schedule(db: Database) -> str:
+        """Get the configured sync schedule."""
+        return AppConfig.get(db, "sync_schedule", AppConfig.DEFAULT_SCHEDULE)
+
+    @staticmethod
+    def set_sync_schedule(db: Database, schedule: str):
+        """Set the sync schedule."""
+        if schedule not in AppConfig.SCHEDULE_OPTIONS:
+            raise ValueError(f"Invalid schedule: {schedule}")
+        AppConfig.set(db, "sync_schedule", schedule)
+
+    @staticmethod
+    def get_next_sync_time(db: Database) -> Optional[str]:
+        """Get the next scheduled sync time (stored by scheduler)."""
+        return AppConfig.get(db, "next_sync_time")
+
+    @staticmethod
+    def set_next_sync_time(db: Database, iso_time: str):
+        """Update the next scheduled sync time."""
+        AppConfig.set(db, "next_sync_time", iso_time)
