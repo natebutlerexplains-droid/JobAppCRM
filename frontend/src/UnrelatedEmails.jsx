@@ -31,10 +31,6 @@ export function UnrelatedEmails({ onError }) {
     }
   }
 
-  if (emails.length === 0 && !loading) {
-    return null
-  }
-
   return (
     <div className="border-t bg-gray-50">
       <div className="max-w-7xl mx-auto px-4 py-4">

@@ -31,10 +31,6 @@ export function JobLeads({ onError }) {
     }
   }
 
-  if (leads.length === 0 && !loading) {
-    return null
-  }
-
   return (
     <div className="border-t bg-blue-50">
       <div className="max-w-7xl mx-auto px-4 py-4">
