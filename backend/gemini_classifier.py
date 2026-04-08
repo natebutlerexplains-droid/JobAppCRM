@@ -6,7 +6,10 @@ from datetime import datetime, timedelta
 from typing import Dict, Any, Optional
 import google.generativeai as genai
 
-from config import Config
+try:
+    from .config import Config
+except ImportError:
+    from config import Config
 
 logger = logging.getLogger(__name__)
 

@@ -3,8 +3,8 @@ import re
 from typing import List, Dict, Any, Optional, Tuple
 from urllib.parse import urlparse
 
-from models import Database, Application
-from gemini_classifier import GeminiClassifier
+from .models import Database, Application
+from .gemini_classifier import GeminiClassifier
 
 logger = logging.getLogger(__name__)
 
