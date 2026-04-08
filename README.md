@@ -1,28 +1,40 @@
 # Job Application CRM
 
-A personal, fully local job application tracking system that automatically syncs emails from Outlook, classifies them with AI, and suggests pipeline stage changes.
+> A personal, fully local job application tracking system that automatically syncs emails from Outlook, classifies them with AI, and suggests pipeline stage changes.
 
-**No external hosting required. Everything runs on your machine.**
+**⚡ No external hosting required. Everything runs on your machine.**
 
-## Features
+![GitHub](https://img.shields.io/badge/repo-private-lightgrey) ![Python](https://img.shields.io/badge/python-3.11+-blue) ![React](https://img.shields.io/badge/react-18+-cyan) ![SQLite](https://img.shields.io/badge/sqlite-WAL-green)
 
-- 📧 **Auto-linking Emails** — Syncs emails from Outlook and automatically links them to job applications based on domain, keywords, and AI classification
-- 🤖 **AI Classification** — Uses Google Gemini to classify emails (application confirmation, interview request, rejection, etc.)
-- 🎯 **Pipeline Tracking** — Drag-and-drop kanban board with statuses: Submitted, More Info Required, Interview Started, Denied, Offered
-- 💡 **Smart Suggestions** — AI suggests stage changes based on email content
-- 🔄 **Automatic Syncing** — Runs daily at 2 AM + on-demand sync
-- 📊 **Unlinked Email Tray** — Searchable tray for emails that couldn't be auto-linked
+---
 
-## Tech Stack
+## ✨ Features
 
-- **Backend:** Python 3.11 + Flask
-- **Database:** SQLite with WAL mode (concurrent access support)
-- **Frontend:** React + Vite + shadcn/ui + Tailwind CSS
-- **Email:** Microsoft Graph API (personal accounts, OAuth2 PKCE)
-- **AI:** Google Gemini API (free tier, `gemini-1.5-flash`)
-- **Scheduler:** APScheduler (daily + startup sync)
+- 📧 **Auto-linking Emails** — Syncs emails from Outlook (via Microsoft Graph API) and intelligently links them to job applications using domain matching, keyword detection, and AI classification
+- 🤖 **AI Classification** — Uses Google Gemini to classify emails: application confirmations, interview requests, rejections, offers, and more
+- 🎯 **Pipeline Tracking** — Drag-and-drop kanban board with five stages: Submitted → More Info Required → Interview Started → Denied / Offered
+- 💡 **Smart Suggestions** — AI recommends stage changes when relevant emails arrive (e.g., "move to Interview Started" when interview request detected)
+- 🔄 **Flexible Syncing** — Automatic daily 2 AM sync + on-demand manual sync with progress tracking and ETA
+- 📊 **Unlinked Tray** — Searchable panel for emails that don't auto-match, with easy manual linking to applications
+- 🔐 **Fully Private** — All data stays on your machine; no cloud dependencies beyond free-tier APIs
+- 📈 **Operational Control** — Monitor sync health, cancel in-progress syncs, view detailed sync history
 
-## Quick Setup
+## 🛠 Tech Stack
+
+| Component | Technology | Notes |
+|-----------|-----------|-------|
+| **Backend** | Python 3.11 + Flask | RESTful API, async email sync |
+| **Database** | SQLite with WAL mode | Concurrent access, no external DB needed |
+| **Frontend** | React 18 + Vite | Fast dev experience, optimized builds |
+| **UI Framework** | shadcn/ui + Tailwind CSS | Beautiful, accessible components |
+| **Email** | Microsoft Graph API | OAuth2 device code flow, personal accounts |
+| **AI** | Google Gemini (free tier) | Email classification & suggestions |
+| **Scheduler** | APScheduler | Background jobs, configurable schedule |
+| **Containerization** | Docker + docker-compose | Optional: deploy anywhere |
+
+---
+
+## 🚀 Quick Start
 
 ### Prerequisites
 - Python 3.11+
@@ -68,19 +80,33 @@ mkdir -p logs
 
 ### 1. Microsoft Graph API (for Outlook)
 
+Personal Microsoft Accounts (outlook.com, hotmail.com) require OAuth2 device code flow.
+
 **Steps:**
-1. Go to [Azure Portal](https://portal.azure.com)
-2. Click "Azure Active Directory" → "App registrations" → "New registration"
-3. Name it "Job CRM"
-4. Under "Supported account types", select **"Accounts in any organizational directory and personal Microsoft accounts"**
-5. Set Redirect URI to `http://localhost:5000/auth/callback`
-6. Go to "Certificates & secrets" → "New client secret"
-7. Copy the **Client ID** and **Client Secret**
-8. Add to `.env`:
+1. Go to [Azure Portal](https://portal.azure.com) (create free account if needed)
+2. Navigate to **Azure Active Directory** → **App registrations** → **+ New registration**
+3. Name: `Job CRM` (or similar)
+4. Under "Supported account types", select: **Accounts in any organizational directory and personal Microsoft accounts**
+5. Leave Redirect URI blank for now (device flow doesn't use it)
+6. Click **Register**
+7. Go to **Certificates & secrets** → **+ New client secret**
+   - Description: `Job CRM local`
+   - Expiration: 24 months (or your preference)
+   - Copy the **Client ID** from the Overview page
+   - Copy the **Client Secret** value (not the Secret ID)
+8. Go to **API Permissions** → **Add a permission**
+   - Select **Microsoft Graph** → **Delegated permissions**
+   - Search for and check `Mail.Read`
+   - Click **Add permissions**
+9. Add to `.env`:
    ```
-   MICROSOFT_CLIENT_ID=your_client_id
-   MICROSOFT_CLIENT_SECRET=your_client_secret
+   MS_GRAPH_CLIENT_ID=your_client_id
+   MS_GRAPH_CLIENT_SECRET=your_client_secret
+   MS_GRAPH_USERNAME=your_outlook_email@outlook.com
+   MS_GRAPH_PASSWORD=your_outlook_password
    ```
+
+> ⚠️ **Security note:** These credentials are for local use only. Never commit `.env` to version control. Add `.env` to `.gitignore` (already done).
 
 ### 2. Google Gemini API (for AI classification)
 
@@ -177,33 +203,129 @@ The system uses a **three-role multi-agent architecture** for maintenance and de
 
 See `backend/models.py` for the full schema.
 
-## Troubleshooting
+## 🔧 Troubleshooting
 
-### "No module named 'models'"
-Make sure you're running from the correct directory and have activated the virtual environment.
+### Setup Issues
+
+#### "No module named 'models'" or Import errors
+**Solution:** Ensure virtual environment is activated and dependencies are installed.
 ```bash
-source venv/bin/activate
-python3 backend/models.py  # Test import
+source venv/bin/activate  # or: venv\Scripts\activate on Windows
+pip install -r backend/requirements.txt
+python3 -c "import models" # Test import
 ```
 
-### "Connection refused" (port 5000 or 3000)
-Another process is using the port. Either:
-- Kill the process: `lsof -i :5000` then `kill -9 <PID>`
-- Use a different port: Set `FLASK_PORT=5001` in `.env`
-
-### "Failed to authenticate with Microsoft"
-1. Double-check your Client ID and Client Secret in `.env`
-2. Verify the redirect URI in Azure is set to `http://localhost:5000/auth/callback`
-3. Make sure you selected **personal Microsoft accounts** during app registration
-
-### "API rate limit exceeded"
-Gemini has a free tier limit. If you hit it, wait ~5 minutes before syncing again, or add your billing info to increase limits.
-
-### Database locked error
-The SQLite WAL (Write-Ahead Logging) system can deadlock. Delete the `-wal` and `-shm` files:
+#### "Connection refused" (can't reach localhost:5000 or 3000)
+**Cause:** Port is already in use or service didn't start.
 ```bash
-rm jobs.db-wal jobs.db-shm
+# Check what's using the port
+lsof -i :5000  # macOS/Linux
+netstat -ano | findstr :5000  # Windows
+
+# Either kill the process or use a different port
+FLASK_PORT=5001 python backend/app.py
 ```
+
+#### "ModuleNotFoundError: No module named 'flask'" or other dependency errors
+**Solution:** Reinstall dependencies:
+```bash
+pip install --upgrade pip
+pip install -r backend/requirements.txt
+```
+
+### Authentication Issues
+
+#### "Device code verification failed" or "Invalid client"
+**Causes & solutions:**
+1. Client ID/Secret mismatch → Double-check `.env` against Azure Portal
+2. App not marked as public client → In Azure: **Manifest** → change `"allowPublicClient": true`
+3. Redirect URI mismatch → Device flow doesn't require redirect URI; if you set one, it can conflict
+4. Account type wrong → Ensure app registration allows **personal Microsoft accounts**
+
+**Debug:** Check logs in the Settings page → "Gemini Health" panel. Click to verify API keys are valid.
+
+#### "AADSTS70002: Client not marked as mobile/public"
+**Solution:** In Azure Portal, go to **Manifest** and set:
+```json
+"allowPublicClient": true,
+"isFallbackPublicClient": true
+```
+
+### Email Sync Issues
+
+#### "No emails synced" or "0 emails fetched"
+**Checklist:**
+1. Outlook account is connected → Settings page should show green indicator
+2. Device code flow completed → Allowed the app in Microsoft's device login screen
+3. MS_GRAPH_CLIENT_ID is correct → Compare with Azure Portal
+4. Email exists in Outlook inbox from the last 30 days (configurable via `EMAIL_SYNC_DAYS_BACK`)
+
+**Debug:** Check backend logs for "Fetched 0 emails" messages.
+
+#### "Pagination errors" or duplicate emails
+**Solution:** This is fixed in latest version. If you see pagination errors:
+```bash
+git pull origin main
+```
+
+#### "Rate limit exceeded" on Gemini API
+**Cause:** Free tier limit is ~60 requests/minute.
+**Solution:**
+- Wait 5 minutes before next sync
+- Add billing to your Google account for higher limits
+- Configure sync frequency in Settings
+
+### Database Issues
+
+#### "Database is locked" or SQLite corruption
+**Solution:** Reset the database by removing WAL files:
+```bash
+rm jobs.db jobs.db-wal jobs.db-shm
+python3 backend/models.py  # Recreate empty DB
+```
+
+#### "Disk I/O error"
+**Cause:** SQLite DB might be on a network drive with latency.
+**Solution:** Move DB to local drive:
+```bash
+# In .env
+DATABASE_PATH=./jobs.db  # Ensure it's a local path, not /mnt or SMB share
+```
+
+### Frontend Issues
+
+#### CSS not loading or components unstyled
+**Solution:** Vite dev server not running or build assets corrupted:
+```bash
+cd frontend
+npm run dev  # Restart dev server
+# or for production build:
+npm run build
+npm run preview
+```
+
+#### "Cannot POST /api/..." (API calls failing)
+**Debug:** Check that backend is running on the correct port:
+```bash
+curl http://localhost:5001/health  # Backend healthcheck
+```
+If fails, restart backend. Check VITE_API_BASE in frontend/.env matches backend port.
+
+### Performance Issues
+
+#### "Sync is very slow" (processing 100+ emails takes >10 min)
+**Profile & optimize:**
+1. Check Gemini health → Settings → "Gemini Health" button
+2. Monitor Gemini rate limit → Check logs for "rate limit" messages
+3. Reduce sync frequency → Settings → Configure auto-sync schedule
+4. Profile with 100 emails first → `EMAIL_SYNC_DAYS_BACK=1` in `.env`
+
+**Expected:** ~1–2 emails per second (varies with Gemini latency)
+
+#### Frontend Kanban sluggish with 500+ applications
+**Solution:** Feature coming in Phase 5 (task virtualization). For now:
+- Archive old applications or split into separate CRM instances
+- Use search/filter to reduce visible cards
 
 ## File Structure
 
