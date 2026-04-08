@@ -26,3 +26,5 @@ Starting fresh — infrastructure setup complete at 2026-04-08 14:30 UTC.
 [2026-04-08 17:21] CLAUDE-DEV finished | task: TASK-002 | files: frontend/src/KanbanBoard.jsx, frontend/src/ApplicationCard.jsx, frontend/src/App.jsx | status: COMPLETE | 5-column drag-and-drop board, all acceptance criteria met, frontend builds successfully
 [2026-04-08 17:22] CLAUDE-DEV starting | task: TASK-003 (CardDetail panel)
 [2026-04-08 17:24] CLAUDE-DEV finished | task: TASK-003 | files: frontend/src/CardDetail.jsx, frontend/src/AddInteraction.jsx, frontend/src/App.jsx | status: COMPLETE | right-side sheet with email list, interactions timeline, and add interaction modal all working
+[2026-04-08 17:25] CLAUDE-DEV starting | task: TASK-004 (NewApplicationForm modal)
+[2026-04-08 17:26] CLAUDE-DEV finished | task: TASK-004 | files: frontend/src/NewApplicationForm.jsx, frontend/src/App.jsx | status: COMPLETE | modal form with all fields, integrates into header, new apps appear in kanban immediately

@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { getApplications, getStats, getStageSuggestions, getUnlinkedEmails } from './api'
 import { KanbanBoard } from './KanbanBoard'
 import { CardDetail } from './CardDetail'
+import { NewApplicationForm } from './NewApplicationForm'
 import './App.css'
 
 function App() {
@@ -13,6 +14,7 @@ function App() {
   const [error, setError] = useState(null)
   const [selectedApp, setSelectedApp] = useState(null)
   const [showCardDetail, setShowCardDetail] = useState(false)
+  const [showNewAppForm, setShowNewAppForm] = useState(false)
 
   useEffect(() => {
     loadData()
@@ -81,8 +83,14 @@ function App() {
     <div className="min-h-screen bg-background">
       {/* Header */}
       <header className="border-b bg-card">
-        <div className="max-w-7xl mx-auto px-4 py-4">
+        <div className="max-w-7xl mx-auto px-4 py-4 flex justify-between items-center">
           <h1 className="text-3xl font-bold text-foreground">Job Application CRM</h1>
+          <button
+            onClick={() => setShowNewAppForm(true)}
+            className="px-4 py-2 bg-primary text-primary-foreground rounded hover:opacity-90 transition-opacity font-medium"
+          >
+            + New Application
+          </button>
         </div>
       </header>
 
@@ -150,6 +158,18 @@ function App() {
         onClose={() => {
           setShowCardDetail(false)
           setSelectedApp(null)
+        }}
+      />
+
+      {/* New Application Form Modal */}
+      <NewApplicationForm
+        isOpen={showNewAppForm}
+        onClose={() => setShowNewAppForm(false)}
+        onSuccess={(newApp) => {
+          // Add new app to the beginning of the list
+          setApplications(prev => [newApp, ...prev])
+          // Reload stats
+          loadData()
         }}
       />
     </div>
