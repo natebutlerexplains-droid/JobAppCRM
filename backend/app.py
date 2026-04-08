@@ -523,6 +523,29 @@ def process_unlinked_emails():
             "errors": [],
         }
 
+        # Get or create "Non-Job Related" bucket application
+        non_job_app = None
+        try:
+            cursor = db.execute(
+                "SELECT id FROM applications WHERE company_name = 'Non-Job Related' LIMIT 1"
+            )
+            row = cursor.fetchone()
+            if row:
+                non_job_app = {"id": row["id"]}
+            else:
+                # Create the Non-Job Related bucket
+                non_job_app_id = Application.create(
+                    db,
+                    company_name="Non-Job Related",
+                    job_title="Notifications & Spam",
+                    date_submitted=datetime.now().strftime("%Y-%m-%d"),
+                    job_url=""
+                )
+                non_job_app = {"id": non_job_app_id}
+                logger.info(f"Created 'Non-Job Related' application bucket with ID {non_job_app_id}")
+        except Exception as e:
+            logger.error(f"Error creating Non-Job Related bucket: {e}")
+
         for email in emails_to_process:
             try:
                 email_id = email["id"]
@@ -537,15 +560,17 @@ def process_unlinked_emails():
                     sender
                 )
 
-                # Skip non-job-related emails
+                # Handle non-job-related emails
                 if not classification.get("is_job_related", False):
-                    # Mark email as non-job-related (set to a special status or skip)
-                    logger.info(f"Email {email_id} classified as non-job-related")
+                    # Link to Non-Job Related bucket so it's removed from unlinked tray
+                    if non_job_app:
+                        Email.link_to_application(db, email_id, non_job_app["id"])
+                        logger.info(f"Email {email_id} linked to Non-Job Related bucket")
                     stats["non_job_related"] += 1
                     stats["processed"] += 1
                     continue
 
-                # Try to link job-related emails
+                # For job-related emails, try to link or create new application
                 confidence = classification.get("confidence", 0.0)
                 if confidence >= 0.7:  # Minimum confidence threshold
                     # Get all applications to attempt linking
@@ -569,6 +594,25 @@ def process_unlinked_emails():
                         Email.link_to_application(db, email_id, best_match["id"])
                         stats["linked"] += 1
                         logger.info(f"Linked email {email_id} to app {best_match['id']} (score: {best_score:.2f})")
+                    else:
+                        # No matching app found - create a new application from the email
+                        # Extract company and job title from classification
+                        company_name = classification.get("company_extracted") or "Unknown Company"
+                        job_title = classification.get("job_title_extracted") or "Unknown Position"
+
+                        # Create new application
+                        app_id = Application.create(
+                            db,
+                            company_name=company_name,
+                            job_title=job_title,
+                            date_submitted=datetime.now().strftime("%Y-%m-%d"),
+                            job_url=""
+                        )
+
+                        # Link email to the new application
+                        Email.link_to_application(db, email_id, app_id)
+                        stats["linked"] += 1
+                        logger.info(f"Created new app '{company_name}' and linked email {email_id} to app {app_id}")
 
                 stats["processed"] += 1
             except Exception as e:
