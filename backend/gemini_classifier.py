@@ -99,11 +99,11 @@ If you cannot determine the information, set it to null. Be strict about categor
                 return result
             else:
                 logger.error(f"Failed to parse Gemini response: {response.text[:500]}")
-                return {"email_type": "unclassified", "is_job_related": False, "confidence": 0.0}
+                return {"category": "unrelated", "is_job_related": False, "confidence": 0.0}
 
         except Exception as e:
             logger.error(f"Gemini classification failed: {e}")
-            return {"email_type": "unclassified", "is_job_related": False, "confidence": 0.0}
+            return {"category": "unrelated", "is_job_related": False, "confidence": 0.0}
 
     def extract_application_info(self, subject: str, body: str, sender: str) -> Optional[Dict[str, str]]:
         """Extract company and job title from an application confirmation email."""
@@ -247,11 +247,11 @@ Respond with a JSON array of these objects. Be strict about what constitutes a j
                     return results
                 else:
                     logger.error(f"Batch classification returned non-array: {text[:200]}")
-                    return [{"email_type": "unclassified", "is_job_related": False, "confidence": 0.0} for _ in emails]
+                    return [{"category": "unrelated", "is_job_related": False, "confidence": 0.0} for _ in emails]
             except json.JSONDecodeError:
                 logger.error(f"Failed to parse batch classification JSON: {text[:200]}")
-                return [{"email_type": "unclassified", "is_job_related": False, "confidence": 0.0} for _ in emails]
+                return [{"category": "unrelated", "is_job_related": False, "confidence": 0.0} for _ in emails]
 
         except Exception as e:
             logger.error(f"Batch classification failed: {e}")
-            return [{"email_type": "unclassified", "is_job_related": False, "confidence": 0.0} for _ in emails]
+            return [{"category": "unrelated", "is_job_related": False, "confidence": 0.0} for _ in emails]

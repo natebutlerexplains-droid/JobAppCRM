@@ -280,7 +280,7 @@ class Email:
     def get_unlinked(db: Database) -> List[Dict[str, Any]]:
         """Get all unlinked emails (application_id IS NULL, excluding classified leads/unrelated)."""
         cursor = db.execute(
-            "SELECT * FROM emails WHERE application_id IS NULL AND gemini_classification NOT LIKE '%\"category\": \"job_lead\"%' AND gemini_classification NOT LIKE '%\"category\": \"unrelated\"%' ORDER BY date_received DESC"
+            "SELECT * FROM emails WHERE application_id IS NULL AND (gemini_classification IS NULL OR (gemini_classification NOT LIKE '%job_lead%' AND gemini_classification NOT LIKE '%unrelated%')) ORDER BY date_received DESC"
         )
         return [dict(row) for row in cursor.fetchall()]
 

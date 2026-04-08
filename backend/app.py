@@ -474,7 +474,7 @@ def get_non_job_related_emails():
     try:
         cursor = db.execute("""
             SELECT * FROM emails
-            WHERE gemini_classification LIKE '%"category": "unrelated"%'
+            WHERE gemini_classification LIKE '%unrelated%'
             AND application_id IS NULL
             ORDER BY date_received DESC
         """)
@@ -491,7 +491,7 @@ def get_job_leads():
     try:
         cursor = db.execute("""
             SELECT * FROM emails
-            WHERE gemini_classification LIKE '%"category": "job_lead"%'
+            WHERE gemini_classification LIKE '%job_lead%'
             AND application_id IS NULL
             ORDER BY date_received DESC
         """)

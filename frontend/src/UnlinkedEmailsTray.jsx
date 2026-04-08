@@ -117,8 +117,10 @@ export function UnlinkedEmailsTray({ emails = [], applications = [], onEmailLink
               <div className="p-3 bg-green-50 border border-green-200 rounded text-sm text-green-900">
                 <p className="font-medium mb-1">{processResult.message}</p>
                 <ul className="text-xs space-y-1 ml-2">
-                  <li>✅ Linked: {processResult.linked}</li>
-                  <li>📧 Non-job-related: {processResult.non_job_related}</li>
+                  <li>✅ Processed: {processResult.processed}</li>
+                  <li>💼 Job Leads: {processResult.leads}</li>
+                  <li>📧 Unrelated: {processResult.unrelated}</li>
+                  <li>🔗 Linked to Apps: {processResult.linked}</li>
                   {processResult.errors && processResult.errors.length > 0 && (
                     <li className="text-red-600">⚠️ Errors: {processResult.errors.length}</li>
                   )}
