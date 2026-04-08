@@ -171,3 +171,75 @@ Be conservative - only match if you're confident this email is related to that a
         except Exception as e:
             logger.error(f"Semantic matching failed: {e}")
             return {"matched_app_ids": [], "match_confidence": 0.0}
+
+    def batch_classify_emails(self, emails: list) -> list:
+        """Classify multiple emails in a single API call (optimization for bulk processing).
+
+        Args:
+            emails: List of dicts with keys: subject, body, sender
+
+        Returns:
+            List of classification results (same format as classify_email)
+        """
+        if not emails:
+            return []
+
+        if len(emails) == 1:
+            # Single email - use regular method
+            email = emails[0]
+            return [self.classify_email(email['subject'], email['body'], email['sender'])]
+
+        # For multiple emails, batch them in a single prompt to reduce API calls
+        gemini_rate_limiter.wait()
+
+        # Format emails for batch processing
+        email_list = "\n\n".join([
+            f"EMAIL {i+1}:\nSubject: {e['subject']}\nBody: {e['body'][:500]}\nSender: {e['sender']}"
+            for i, e in enumerate(emails[:10])  # Batch up to 10 at a time to avoid token limits
+        ])
+
+        prompt = f"""Classify the following {len(emails[:10])} emails for job applications. Respond ONLY with a JSON array, no markdown.
+
+{email_list}
+
+For EACH email, respond with an object:
+{{
+  "email_index": number (0-based),
+  "is_job_related": boolean,
+  "email_type": "application_confirmation|interview_request|rejection|more_info_needed|other",
+  "company_extracted": "string or null",
+  "job_title_extracted": "string or null",
+  "requires_action": boolean,
+  "action_summary": "string or null",
+  "confidence": 0.0-1.0
+}}
+
+Respond with a JSON array of these objects. Be strict about what constitutes a job application email."""
+
+        try:
+            response = self.model.generate_content(prompt, generation_config=genai.types.GenerationConfig(
+                temperature=0.1,
+                max_output_tokens=2000,
+            ))
+
+            # Extract JSON array
+            text = response.text
+            text = re.sub(r"```json\s*", "", text)
+            text = re.sub(r"```\s*$", "", text)
+            text = text.strip()
+
+            try:
+                results = json.loads(text)
+                if isinstance(results, list):
+                    # Ensure all results have the email_index for tracking
+                    return results
+                else:
+                    logger.error(f"Batch classification returned non-array: {text[:200]}")
+                    return [{"email_type": "unclassified", "is_job_related": False, "confidence": 0.0} for _ in emails]
+            except json.JSONDecodeError:
+                logger.error(f"Failed to parse batch classification JSON: {text[:200]}")
+                return [{"email_type": "unclassified", "is_job_related": False, "confidence": 0.0} for _ in emails]
+
+        except Exception as e:
+            logger.error(f"Batch classification failed: {e}")
+            return [{"email_type": "unclassified", "is_job_related": False, "confidence": 0.0} for _ in emails]

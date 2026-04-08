@@ -3,8 +3,12 @@ import re
 from typing import List, Dict, Any, Optional, Tuple
 from urllib.parse import urlparse
 
-from .models import Database, Application
-from .gemini_classifier import GeminiClassifier
+try:
+    from .models import Database, Application
+    from .gemini_classifier import GeminiClassifier
+except ImportError:
+    from models import Database, Application
+    from gemini_classifier import GeminiClassifier
 
 logger = logging.getLogger(__name__)
 
@@ -88,12 +92,23 @@ class ApplicationLinker:
 
         return 0.0
 
-    def link_email(self, subject: str, body: str, sender: str) -> Optional[Dict[str, Any]]:
+    def link_email(self, subject: str, body: str, sender: str, applications: List = None) -> Optional[Dict[str, Any]]:
         """
         Link an email to the best matching application.
         Returns {"app_id": int, "confidence": float} or None if no match found.
+
+        Args:
+            subject: Email subject
+            body: Email body
+            sender: Sender email address
+            applications: Optional pre-loaded list of applications (optimization to avoid DB query)
+
+        Returns:
+            Dict with app_id and confidence, or None if no match
         """
-        applications = Application.get_all(self.db)
+        # Use provided applications or fetch from DB (optimization: cache in caller)
+        if applications is None:
+            applications = Application.get_all(self.db)
         if not applications:
             return None
 

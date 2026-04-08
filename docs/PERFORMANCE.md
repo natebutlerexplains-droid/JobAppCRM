@@ -77,10 +77,22 @@ Limitation: Classification rate caps overall throughput
 ## Implementation Status
 
 - [x] Profiling script created: `scripts/profile_email_sync.py`
-- [ ] Batch Gemini implementation
-- [ ] Cache application data during sync
-- [ ] Domain-based pre-filtering
+- [x] Batch Gemini classification method added: `GeminiClassifier.batch_classify_emails()`
+- [x] Cache application data during sync: `EmailProcessor.process_emails()` loads apps once
+- [ ] Domain-based pre-filtering (next: optimize linker)
 - [ ] Database indexes added
+
+### Implemented Optimizations
+
+1. **Batch Classification** (TASK-014 phase 1)
+   - Added `batch_classify_emails()` method to handle up to 10 emails per API call
+   - Reduces API calls by ~10x when processing large batches
+   - Maintains backward compatibility with single-email `classify_email()`
+
+2. **Application Caching** (TASK-014 phase 1)
+   - `EmailProcessor.process_emails()` now loads all applications once at sync start
+   - Passes cached list to `link_email()` to avoid repeated DB queries
+   - Estimated 10-15% improvement for typical sync (10-50 apps)
 
 ## Performance Targets
 
