@@ -63,10 +63,22 @@ Email Subject: {subject}
 Email Body: {body[:2000]}
 Sender: {sender}
 
+Classify as ONE of:
+1. "application_confirmation" - Email confirming that YOUR APPLICATION WAS RECEIVED (e.g., "Your application has been received", "Application status update", HR confirmation)
+2. "job_lead" - Job recommendations/matches sent to you that YOU could apply to (e.g., "We found these jobs for you", "Recommended roles", "Job matches based on your profile")
+3. "interview_request" - Request for an interview or next steps
+4. "rejection" - Application rejected
+5. "more_info_needed" - Requesting more information from you
+6. "unrelated" - Not job-related (newsletters, notifications, marketing, social emails)
+
+KEYWORDS FOR application_confirmation: "application received", "application status", "we received your", "confirmation of application", "application submitted"
+KEYWORDS FOR job_lead: "we found", "recommended for you", "job match", "based on your profile", "we think you'd be great"
+KEYWORDS FOR unrelated: "newsletter", "check out jobs", "notification", "social", "book recommendation", "sign in detected"
+
 Respond with:
 {{
   "is_job_related": boolean,
-  "email_type": "application_confirmation|interview_request|rejection|more_info_needed|other",
+  "category": "application_confirmation|job_lead|interview_request|rejection|more_info_needed|unrelated",
   "company_extracted": "string or null",
   "job_title_extracted": "string or null",
   "requires_action": boolean,
@@ -74,7 +86,7 @@ Respond with:
   "confidence": 0.0-1.0
 }}
 
-If you cannot determine the information, set it to null. Be strict about what constitutes a job application email."""
+If you cannot determine the information, set it to null. Be strict about categorization."""
 
         try:
             response = self.model.generate_content(prompt, generation_config=genai.types.GenerationConfig(

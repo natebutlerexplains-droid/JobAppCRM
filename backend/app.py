@@ -474,7 +474,7 @@ def get_non_job_related_emails():
     try:
         cursor = db.execute("""
             SELECT * FROM emails
-            WHERE gemini_classification LIKE '%"marked_non_job_related": true%'
+            WHERE gemini_classification LIKE '%"category": "unrelated"%'
             AND application_id IS NULL
             ORDER BY date_received DESC
         """)
@@ -482,6 +482,23 @@ def get_non_job_related_emails():
         return jsonify(emails), 200
     except Exception as e:
         logger.error(f"Error fetching non-job-related emails: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/emails/job-leads", methods=["GET"])
+def get_job_leads():
+    """Get all emails marked as job leads (recommendations)."""
+    try:
+        cursor = db.execute("""
+            SELECT * FROM emails
+            WHERE gemini_classification LIKE '%"category": "job_lead"%'
+            AND application_id IS NULL
+            ORDER BY date_received DESC
+        """)
+        emails = [dict(row) for row in cursor.fetchall()]
+        return jsonify(emails), 200
+    except Exception as e:
+        logger.error(f"Error fetching job leads: {e}")
         return jsonify({"error": str(e)}), 500
 
 
@@ -537,7 +554,8 @@ def process_unlinked_emails():
         stats = {
             "processed": 0,
             "linked": 0,
-            "non_job_related": 0,
+            "leads": 0,
+            "unrelated": 0,
             "errors": [],
         }
 
@@ -555,64 +573,79 @@ def process_unlinked_emails():
                     sender
                 )
 
-                # Handle non-job-related emails - mark them with a special email_type
-                # We use a custom field to mark them (gemini_classification JSON)
-                if not classification.get("is_job_related", False):
-                    # Store classification result with non-job marker
-                    classification["marked_non_job_related"] = True
-                    db.execute(
-                        "UPDATE emails SET gemini_classification = ? WHERE id = ?",
-                        (json.dumps(classification), email_id)
-                    )
-                    db.commit()
-                    logger.info(f"Email {email_id} marked as non-job-related")
-                    stats["non_job_related"] += 1
+                # Store classification result
+                db.execute(
+                    "UPDATE emails SET gemini_classification = ? WHERE id = ?",
+                    (json.dumps(classification), email_id)
+                )
+                db.commit()
+
+                category = classification.get("category", "unrelated")
+
+                # Handle unrelated emails
+                if category == "unrelated":
+                    logger.info(f"Email {email_id} marked as unrelated")
+                    stats["unrelated"] += 1
                     stats["processed"] += 1
                     continue
 
-                # For job-related emails, try to link or create new application
-                confidence = classification.get("confidence", 0.0)
-                if confidence >= 0.7:  # Minimum confidence threshold
-                    # Get all applications to attempt linking
-                    applications = Application.get_all(db)
-                    best_match = None
-                    best_score = 0.7  # Require confidence >= 0.7
+                # Handle job leads (recommendations)
+                if category == "job_lead":
+                    logger.info(f"Email {email_id} marked as job lead")
+                    stats["leads"] += 1
+                    stats["processed"] += 1
+                    continue
 
-                    # Use application linker to find best match
-                    for app in applications:
-                        # Calculate semantic match score
-                        score = processor.linker.semantic_match_email_to_application(
-                            subject, body_excerpt, app["company_name"], app["job_title"]
-                        )
+                # Handle application confirmations - create or link application
+                if category == "application_confirmation":
+                    confidence = classification.get("confidence", 0.0)
+                    if confidence >= 0.7:  # Minimum confidence threshold
+                        # Get all applications to attempt linking
+                        applications = Application.get_all(db)
+                        best_match = None
+                        best_score = 0.7  # Require confidence >= 0.7
 
-                        if score > best_score:
-                            best_score = score
-                            best_match = app
+                        # Use application linker to find best match
+                        for app in applications:
+                            # Calculate semantic match score
+                            score = processor.linker.semantic_match_email_to_application(
+                                subject, body_excerpt, app["company_name"], app["job_title"]
+                            )
 
-                    # If we found a good match, link it
-                    if best_match:
-                        Email.link_to_application(db, email_id, best_match["id"])
-                        stats["linked"] += 1
-                        logger.info(f"Linked email {email_id} to app {best_match['id']} (score: {best_score:.2f})")
-                    else:
-                        # No matching app found - create a new application from the email
-                        # Extract company and job title from classification
-                        company_name = classification.get("company_extracted") or "Unknown Company"
-                        job_title = classification.get("job_title_extracted") or "Unknown Position"
+                            if score > best_score:
+                                best_score = score
+                                best_match = app
 
-                        # Create new application
-                        app_id = Application.create(
-                            db,
-                            company_name=company_name,
-                            job_title=job_title,
-                            date_submitted=datetime.now().strftime("%Y-%m-%d"),
-                            job_url=""
-                        )
+                        # If we found a good match, link it
+                        if best_match:
+                            Email.link_to_application(db, email_id, best_match["id"])
+                            stats["linked"] += 1
+                            logger.info(f"Linked email {email_id} to app {best_match['id']} (score: {best_score:.2f})")
+                        else:
+                            # No matching app found - create a new application from the email
+                            # Extract company and job title from classification
+                            company_name = classification.get("company_extracted") or "Unknown Company"
+                            job_title = classification.get("job_title_extracted") or "Unknown Position"
 
-                        # Link email to the new application
-                        Email.link_to_application(db, email_id, app_id)
-                        stats["linked"] += 1
-                        logger.info(f"Created new app '{company_name}' and linked email {email_id} to app {app_id}")
+                            # Create new application
+                            app_id = Application.create(
+                                db,
+                                company_name=company_name,
+                                job_title=job_title,
+                                date_submitted=datetime.now().strftime("%Y-%m-%d"),
+                                job_url=""
+                            )
+
+                            # Link email to the new application
+                            Email.link_to_application(db, email_id, app_id)
+                            stats["linked"] += 1
+                            logger.info(f"Created new app '{company_name}' and linked email {email_id} to app {app_id}")
+
+                    stats["processed"] += 1
+                    continue
+
+                # Other job-related categories (interview, rejection, etc.) - just mark as processed
+                stats["processed"] += 1
 
                 stats["processed"] += 1
             except Exception as e:

@@ -5,6 +5,7 @@ import { CardDetail } from './CardDetail'
 import { NewApplicationForm } from './NewApplicationForm'
 import { UnlinkedEmailsTray } from './UnlinkedEmailsTray'
 import { UnrelatedEmails } from './UnrelatedEmails'
+import { JobLeads } from './JobLeads'
 import { Settings } from './Settings'
 import './App.css'
 
@@ -259,6 +260,15 @@ function App() {
             </>
           )}
         </div>
+
+        {/* Job Leads Section */}
+        {currentPage === 'dashboard' && (
+          <JobLeads
+            onError={(err) => {
+              setError(err)
+            }}
+          />
+        )}
 
         {/* Unrelated Emails Section */}
         {currentPage === 'dashboard' && (
