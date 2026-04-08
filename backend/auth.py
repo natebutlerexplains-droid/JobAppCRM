@@ -76,7 +76,6 @@ class MSGraphAuth:
         # For a desktop app, we use the authorization code flow with PKCE
         result = self.app.acquire_token_interactive(
             scopes=Config.MS_GRAPH_SCOPE,
-            redirect_uri=Config.MS_GRAPH_REDIRECT_URI,
         )
 
         if "access_token" in result:
