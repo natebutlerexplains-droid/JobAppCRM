@@ -1,0 +1,2 @@
+
+[2026-04-08 23:21] CLAUDE-DEV fixed | task: TASK-021 | Redesigned unlinked email processor to properly organize emails. Non-job-related emails now appear in separate "Unrelated Emails" expandable section (above unlinked tray). Job-related emails create new applications in Submitted bucket with extracted company/role. Tested 5-email processing - non-job marked separately. Files: backend/app.py, backend/models.py, frontend/src/{UnrelatedEmails.jsx,UnlinkedEmailsTray.jsx,App.jsx,api.js}

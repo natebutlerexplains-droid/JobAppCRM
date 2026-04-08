@@ -278,9 +278,9 @@ class Email:
 
     @staticmethod
     def get_unlinked(db: Database) -> List[Dict[str, Any]]:
-        """Get all unlinked emails (application_id IS NULL)."""
+        """Get all unlinked emails (application_id IS NULL, excluding marked non-job-related)."""
         cursor = db.execute(
-            "SELECT * FROM emails WHERE application_id IS NULL ORDER BY date_received DESC"
+            "SELECT * FROM emails WHERE application_id IS NULL AND gemini_classification NOT LIKE '%\"marked_non_job_related\": true%' ORDER BY date_received DESC"
         )
         return [dict(row) for row in cursor.fetchall()]
 
