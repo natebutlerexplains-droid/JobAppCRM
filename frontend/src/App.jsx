@@ -4,6 +4,7 @@ import { KanbanBoard } from './KanbanBoard'
 import { CardDetail } from './CardDetail'
 import { NewApplicationForm } from './NewApplicationForm'
 import { UnlinkedEmailsTray } from './UnlinkedEmailsTray'
+import { UnrelatedEmails } from './UnrelatedEmails'
 import { Settings } from './Settings'
 import './App.css'
 
@@ -258,6 +259,15 @@ function App() {
             </>
           )}
         </div>
+
+        {/* Unrelated Emails Section */}
+        {currentPage === 'dashboard' && (
+          <UnrelatedEmails
+            onError={(err) => {
+              setError(err)
+            }}
+          />
+        )}
 
         {/* Unlinked Emails Tray */}
         {currentPage === 'dashboard' && (

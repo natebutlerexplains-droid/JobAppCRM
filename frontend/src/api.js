@@ -36,6 +36,7 @@ export const updateStageSuggestion = (id, data) => api.patch(`/stage-suggestions
 
 // Emails
 export const getUnlinkedEmails = () => api.get('/emails/unlinked')
+export const getNonJobRelatedEmails = () => api.get('/emails/non-job-related')
 export const linkEmail = (emailId, appId) => api.patch(`/emails/${emailId}/link`, { app_id: appId })
 export const processUnlinkedEmails = (limit = null) => api.post('/emails/process-unlinked', { limit })
 

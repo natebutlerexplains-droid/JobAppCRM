@@ -1,6 +1,7 @@
 import logging
 import os
 import threading
+import json
 from datetime import datetime, timedelta
 from flask import Flask, jsonify, request
 from flask_cors import CORS
@@ -467,6 +468,23 @@ def get_unlinked_emails():
         return jsonify({"error": str(e)}), 500
 
 
+@app.route("/api/emails/non-job-related", methods=["GET"])
+def get_non_job_related_emails():
+    """Get all emails marked as non-job-related."""
+    try:
+        cursor = db.execute("""
+            SELECT * FROM emails
+            WHERE gemini_classification LIKE '%"marked_non_job_related": true%'
+            AND application_id IS NULL
+            ORDER BY date_received DESC
+        """)
+        emails = [dict(row) for row in cursor.fetchall()]
+        return jsonify(emails), 200
+    except Exception as e:
+        logger.error(f"Error fetching non-job-related emails: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
 @app.route("/api/emails/<int:email_id>/link", methods=["PATCH"])
 def link_email(email_id):
     """Manually link an email to an application."""
@@ -523,29 +541,6 @@ def process_unlinked_emails():
             "errors": [],
         }
 
-        # Get or create "Non-Job Related" bucket application
-        non_job_app = None
-        try:
-            cursor = db.execute(
-                "SELECT id FROM applications WHERE company_name = 'Non-Job Related' LIMIT 1"
-            )
-            row = cursor.fetchone()
-            if row:
-                non_job_app = {"id": row["id"]}
-            else:
-                # Create the Non-Job Related bucket
-                non_job_app_id = Application.create(
-                    db,
-                    company_name="Non-Job Related",
-                    job_title="Notifications & Spam",
-                    date_submitted=datetime.now().strftime("%Y-%m-%d"),
-                    job_url=""
-                )
-                non_job_app = {"id": non_job_app_id}
-                logger.info(f"Created 'Non-Job Related' application bucket with ID {non_job_app_id}")
-        except Exception as e:
-            logger.error(f"Error creating Non-Job Related bucket: {e}")
-
         for email in emails_to_process:
             try:
                 email_id = email["id"]
@@ -560,12 +555,17 @@ def process_unlinked_emails():
                     sender
                 )
 
-                # Handle non-job-related emails
+                # Handle non-job-related emails - mark them with a special email_type
+                # We use a custom field to mark them (gemini_classification JSON)
                 if not classification.get("is_job_related", False):
-                    # Link to Non-Job Related bucket so it's removed from unlinked tray
-                    if non_job_app:
-                        Email.link_to_application(db, email_id, non_job_app["id"])
-                        logger.info(f"Email {email_id} linked to Non-Job Related bucket")
+                    # Store classification result with non-job marker
+                    classification["marked_non_job_related"] = True
+                    db.execute(
+                        "UPDATE emails SET gemini_classification = ? WHERE id = ?",
+                        (json.dumps(classification), email_id)
+                    )
+                    db.commit()
+                    logger.info(f"Email {email_id} marked as non-job-related")
                     stats["non_job_related"] += 1
                     stats["processed"] += 1
                     continue
