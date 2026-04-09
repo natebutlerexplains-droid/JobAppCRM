@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { Badge } from '@/components/ui/badge'
-import { getJobLeads } from './api'
+import { getJobLeads, formatDate } from './api'
 
 export function JobLeads({ onError }) {
   const [isOpen, setIsOpen] = useState(false)
@@ -78,7 +78,7 @@ export function JobLeads({ onError }) {
                     From: {lead.sender}
                   </p>
                   <p className="text-xs text-muted-foreground">
-                    {new Date(lead.date_received).toLocaleDateString()}
+                    {formatDate(lead.date_received)}
                   </p>
                 </div>
 

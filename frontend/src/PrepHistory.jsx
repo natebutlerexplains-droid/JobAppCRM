@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { getPrepHistory } from './api'
+import { getPrepHistory, formatDate } from './api'
 
 export function PrepHistory({ onSelectPrep }) {
   const [preps, setPreps] = useState([])
@@ -77,7 +77,7 @@ export function PrepHistory({ onSelectPrep }) {
                     <td className="px-4 py-3 font-medium text-foreground">{prep.company_name}</td>
                     <td className="px-4 py-3 text-foreground">{prep.job_title}</td>
                     <td className="px-4 py-3 text-sm text-muted-foreground">
-                      {new Date(prep.created_at).toLocaleDateString()}
+                      {formatDate(prep.created_at)}
                     </td>
                     <td className="px-4 py-3 text-center text-foreground">
                       {prep.quiz_count || 0}

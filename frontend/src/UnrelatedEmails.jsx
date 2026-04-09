@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { Badge } from '@/components/ui/badge'
-import { getNonJobRelatedEmails, reclassifyEmails, correctEmailClassification, trashEmail } from './api'
+import { getNonJobRelatedEmails, reclassifyEmails, correctEmailClassification, trashEmail, formatDate } from './api'
 
 // Predefined reason codes for user corrections
 const REASON_CODES = {
@@ -214,7 +214,7 @@ export function UnrelatedEmails({ onError, onReclassified, onGaugeRefresh }) {
                     From: {email.sender}
                   </p>
                   <p className="text-xs text-muted-foreground">
-                    {new Date(email.date_received).toLocaleDateString()}
+                    {formatDate(email.date_received)}
                   </p>
                 </div>
 

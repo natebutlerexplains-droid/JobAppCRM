@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react'
 import { Badge } from '@/components/ui/badge'
-import { linkEmail, processUnlinkedEmails } from './api'
+import { linkEmail, processUnlinkedEmails, formatDate } from './api'
 
 export function UnlinkedEmailsTray({ emails = [], applications = [], onEmailLinked, onError, onProcessed }) {
   const [isOpen, setIsOpen] = useState(false)
@@ -146,7 +146,7 @@ export function UnlinkedEmailsTray({ emails = [], applications = [], onEmailLink
                     From: {email.sender}
                   </p>
                   <p className="text-xs text-muted-foreground">
-                    {new Date(email.date_received).toLocaleDateString()}
+                    {formatDate(email.date_received)}
                   </p>
                 </div>
 

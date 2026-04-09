@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { getApplicationEmails, getApplicationInteractions, createInteraction, updateApplication, deleteApplication } from './api'
+import { getApplicationEmails, getApplicationInteractions, createInteraction, updateApplication, deleteApplication, formatDate } from './api'
 import { AddInteraction } from './AddInteraction'
 
 export function CardDetail({ application, isOpen, onClose }) {
@@ -184,7 +184,7 @@ export function CardDetail({ application, isOpen, onClose }) {
               <div>
                 <span className="text-muted-foreground">Applied: </span>
                 <span className="text-foreground">
-                  {new Date(application.date_submitted).toLocaleDateString()}
+                  {formatDate(application.date_submitted)}
                 </span>
               </div>
 
@@ -375,7 +375,7 @@ export function CardDetail({ application, isOpen, onClose }) {
                         From: {email.sender}
                       </p>
                       <p className="text-xs text-muted-foreground">
-                        {new Date(email.date_received).toLocaleDateString()}
+                        {formatDate(email.date_received)}
                       </p>
                     </div>
                   ))

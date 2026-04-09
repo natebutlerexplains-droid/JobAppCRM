@@ -1,5 +1,6 @@
 import { Card } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
+import { formatDate } from './api'
 
 export function ApplicationCard({ application, hasSuggestion, onClick, onPrepClick }) {
   const hasPendingSuggestion = hasSuggestion === true
@@ -30,7 +31,7 @@ export function ApplicationCard({ application, hasSuggestion, onClick, onPrepCli
 
         {/* Date Applied */}
         <p className="text-xs text-muted-foreground">
-          Applied: {new Date(application.date_submitted).toLocaleDateString()}
+          Applied: {formatDate(application.date_submitted)}
         </p>
 
         {/* Pending Suggestion Badge */}

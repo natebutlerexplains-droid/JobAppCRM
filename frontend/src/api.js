@@ -9,6 +9,23 @@ const api = axios.create({
   },
 })
 
+/**
+ * Parse a date string (YYYY-MM-DD) or ISO timestamp without timezone conversion.
+ * Prevents JavaScript from interpreting dates as UTC and converting to local timezone.
+ */
+export const formatDate = (dateString) => {
+  if (!dateString) return ''
+  // If it's just a date (YYYY-MM-DD), parse it directly
+  if (dateString.length === 10) {
+    const [year, month, day] = dateString.split('-')
+    return new Date(year, month - 1, day).toLocaleDateString()
+  }
+  // If it's an ISO timestamp, extract the date part and parse
+  const datePart = dateString.split('T')[0]
+  const [year, month, day] = datePart.split('-')
+  return new Date(year, month - 1, day).toLocaleDateString()
+}
+
 // Applications
 export const getApplications = (search = '', status = '', emailType = '') => {
   const params = new URLSearchParams()
