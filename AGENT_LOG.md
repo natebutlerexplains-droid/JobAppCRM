@@ -212,3 +212,60 @@ Rebuilt CardDetail from right-side sheet to centered modal dialog with full edit
 ✅ Emails and interactions tabs visible in modal
 
 **Ready for testing:** Run frontend dev server and click a card to see new modal experience.
+
+[2026-04-09 04:15] CLAUDE-DEV finished | task: TASK-UX-002 | Fix timestamp bug — COMPLETE
+
+**Root Cause:** JavaScript's `new Date('YYYY-MM-DD')` parses as UTC and converts to local timezone, causing -1 day display in US timezones.
+
+**Solution:** Created `formatDate()` utility that parses date strings directly in local timezone without UTC conversion.
+
+**Files Modified:**
+- frontend/src/api.js: Added formatDate() utility function
+- frontend/src/{ApplicationCard, CardDetail, JobLeads, UnlinkedEmailsTray, UnrelatedEmails, PrepHistory}.jsx: Updated all date displays to use formatDate()
+
+**Testing:**
+✓ formatDate('2026-04-09') now displays as 4/9/2026 (was 4/8/2026)
+✓ formatDate('2026-04-08') now displays as 4/8/2026 (was 4/7/2026)
+✓ Frontend builds successfully
+
+---
+
+[2026-04-09 04:20] CLAUDE-DEV finished | task: TASK-UX-003 | Interview Prep Gating & Workflow — COMPLETE
+
+**Implementation:**
+✅ Prep button now gated on core trio: company_name + job_title + job_url
+✅ Button disabled with helpful message if any field missing
+✅ CardDetail shows "Prep Requirements" checklist during edit mode with visual indicators
+✅ InterviewPrepPage displays salary range + asking price in banner
+✅ Backend returns 400 error if required fields missing when researching company
+
+**Features:**
+- Prep button shows disabled state with "Add company, position & link" message
+- Edit mode displays checklist showing ✓ or ○ for each core requirement
+- Salary context visible at top of InterviewPrepPage
+- Backend validation prevents Gemini calls with incomplete data
+
+**Files Modified:**
+- frontend/src/ApplicationCard.jsx: Gating logic + disabled state
+- frontend/src/CardDetail.jsx: Prep Requirements checklist in edit mode
+- frontend/src/InterviewPrepPage.jsx: Added negotiation_target display
+- backend/app.py: Validation on POST /api/applications/{id}/prep/research
+
+**Testing:**
+✓ Attempted research on app without job_url returns 400
+✓ Button shows disabled state correctly
+✓ Prep Requirements checklist updates in real-time
+✓ Salary fields display in InterviewPrepPage
+✓ Frontend builds successfully
+
+---
+
+## Summary: All Three UX Fixes Complete
+
+| Task | Status | Impact |
+|------|--------|--------|
+| **TASK-UX-001: CardDetail Modal** | ✅ COMPLETE | Full edit/delete capability, new salary fields |
+| **TASK-UX-002: Timestamp Bug** | ✅ COMPLETE | All dates now display correctly (no -1 day offset) |
+| **TASK-UX-003: Prep Gating** | ✅ COMPLETE | Interview prep only unlocks with required fields |
+
+**Ready for testing:** All changes committed, frontend builds successfully, backend validation working.
