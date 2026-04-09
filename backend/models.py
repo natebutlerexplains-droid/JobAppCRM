@@ -179,6 +179,11 @@ class Database:
         except Exception:
             pass
 
+        try:
+            cursor.execute("ALTER TABLE applications ADD COLUMN salary_negotiation_target INTEGER")
+        except Exception:
+            pass
+
         self.connection.commit()
 
     def _sync_logs_allows_cancelled(self) -> bool:
@@ -284,7 +289,7 @@ class Application:
     @staticmethod
     def update(db: Database, app_id: int, fields: Dict[str, Any]):
         """Update application with whitelisted fields."""
-        ALLOWED = {'company_name', 'job_title', 'job_url', 'notes', 'salary_min', 'salary_max', 'status', 'company_domain'}
+        ALLOWED = {'company_name', 'job_title', 'job_url', 'notes', 'salary_min', 'salary_max', 'salary_negotiation_target', 'status', 'company_domain'}
 
         # Filter to allowed fields only
         updates = {k: v for k, v in fields.items() if k in ALLOWED}
