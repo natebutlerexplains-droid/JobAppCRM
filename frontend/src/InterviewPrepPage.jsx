@@ -144,10 +144,17 @@ export function InterviewPrepPage({ applicationId, application, onBack }) {
             </button>
           </div>
 
-          {/* Salary Banner */}
-          {(application?.salary_min || application?.salary_max) && (
+          {/* Salary & Negotiation Banner */}
+          {(application?.salary_min || application?.salary_max || application?.salary_negotiation_target) && (
             <div className="p-3 bg-blue-50 border border-blue-200 rounded text-sm text-blue-900 mb-4">
-              💰 Your range: ${application.salary_min?.toLocaleString() || '?'} – ${application.salary_max?.toLocaleString() || '?'}
+              <div>
+                💰 Your range: ${application.salary_min?.toLocaleString() || '?'} – ${application.salary_max?.toLocaleString() || '?'}
+              </div>
+              {application?.salary_negotiation_target && (
+                <div className="mt-1 text-sm">
+                  🎯 Asking price: ${application.salary_negotiation_target.toLocaleString()}
+                </div>
+              )}
             </div>
           )}
 

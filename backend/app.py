@@ -1414,6 +1414,14 @@ def research_company_prep(app_id):
         if not app:
             return jsonify({"error": "Application not found"}), 404
 
+        # Validate core trio: company_name, job_title, job_url
+        if not app.get("company_name") or not app.get("company_name").strip():
+            return jsonify({"error": "Company name is required"}), 400
+        if not app.get("job_title") or not app.get("job_title").strip():
+            return jsonify({"error": "Job title is required"}), 400
+        if not app.get("job_url") or not app.get("job_url").strip():
+            return jsonify({"error": "Job URL is required"}), 400
+
         # Get or create interview prep
         prep = InterviewPrep.get_or_create(db, app_id)
 

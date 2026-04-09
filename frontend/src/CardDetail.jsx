@@ -207,9 +207,32 @@ export function CardDetail({ application, isOpen, onClose }) {
               </div>
             </div>
 
+            {/* Prep Requirements Checklist - Only in Edit Mode */}
+            {isEditMode && (
+              <div className="mt-6 pt-6 border-t">
+                <div className="mb-4">
+                  <label className="text-xs text-muted-foreground block mb-2 font-medium">Prep Requirements</label>
+                  <div className="space-y-2 text-xs">
+                    <div className={`flex items-center gap-2 ${(editedFields.company_name ?? application.company_name) && (editedFields.company_name ?? application.company_name).trim() ? 'text-green-700' : 'text-muted-foreground'}`}>
+                      <span className="text-lg">{(editedFields.company_name ?? application.company_name) && (editedFields.company_name ?? application.company_name).trim() ? '✓' : '○'}</span>
+                      <span>Company name</span>
+                    </div>
+                    <div className={`flex items-center gap-2 ${(editedFields.job_title ?? application.job_title) && (editedFields.job_title ?? application.job_title).trim() ? 'text-green-700' : 'text-muted-foreground'}`}>
+                      <span className="text-lg">{(editedFields.job_title ?? application.job_title) && (editedFields.job_title ?? application.job_title).trim() ? '✓' : '○'}</span>
+                      <span>Position title</span>
+                    </div>
+                    <div className={`flex items-center gap-2 ${(editedFields.job_url ?? application.job_url) && (editedFields.job_url ?? application.job_url).trim() ? 'text-green-700' : 'text-muted-foreground'}`}>
+                      <span className="text-lg">{(editedFields.job_url ?? application.job_url) && (editedFields.job_url ?? application.job_url).trim() ? '✓' : '○'}</span>
+                      <span>Job posting URL</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
             {/* Edit Mode: Additional Fields */}
             {isEditMode && (
-              <div className="mt-6 pt-6 border-t space-y-4">
+              <div className="mt-6 space-y-4">
                 {/* Job URL */}
                 <div>
                   <label className="text-xs text-muted-foreground block mb-1 font-medium">Job URL</label>
