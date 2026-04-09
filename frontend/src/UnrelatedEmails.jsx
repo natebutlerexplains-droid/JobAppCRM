@@ -119,9 +119,11 @@ export function UnrelatedEmails({ onError, onReclassified, onGaugeRefresh }) {
     setTrashing(emailId)
     try {
       await trashEmail(emailId)
+      // Remove email locally (optimistic update)
       setEmails(prev => prev.filter(e => e.id !== emailId))
+      // Update gauge (training signal recorded)
       if (onGaugeRefresh) onGaugeRefresh()
-      if (onReclassified) onReclassified()
+      // Don't call onReclassified for trash — keeps UI at same position
     } catch (err) {
       const errorMsg = err.response?.data?.error || err.message || 'Failed to trash email'
       setError(errorMsg)
