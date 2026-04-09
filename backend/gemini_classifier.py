@@ -419,3 +419,151 @@ If you cannot determine the information, set it to null. The subject line is the
         except Exception as e:
             logger.error(f"Gemini classification with feedback failed: {e}")
             return {"category": "unrelated", "is_job_related": False, "confidence": 0.0}
+
+    def research_company(self, company_name: str, job_title: str, job_url: Optional[str] = None) -> Dict[str, Any]:
+        """Research a company for interview preparation."""
+        gemini_rate_limiter.wait()
+
+        job_url_context = f"\nJob URL: {job_url}" if job_url else ""
+
+        prompt = f"""Research this company and role for interview preparation. Respond ONLY with valid JSON, no markdown formatting.
+
+Company: {company_name}
+Job Title: {job_title}{job_url_context}
+
+Provide research information in this JSON format (respond with ONLY the JSON):
+{{
+  "summary": "2-3 sentence overview of what the company does",
+  "business_model": "How the company makes money / revenue model",
+  "recent_news": ["Notable news item 1 from last 6 months", "Notable news item 2"],
+  "culture_notes": "Key insights about company culture and work environment",
+  "key_facts": ["Fact 1 to know before interviewing", "Fact 2", "Fact 3"]
+}}
+
+Focus on information that would be useful for someone interviewing for a {job_title} role."""
+
+        try:
+            response = self.model.generate_content(prompt, generation_config=genai.types.GenerationConfig(
+                temperature=0.7,
+                max_output_tokens=600,
+            ))
+
+            result = self._extract_json(response.text)
+            if result and result.get("summary"):
+                logger.info(f"Researched company: {company_name}")
+                return result
+            else:
+                logger.warning(f"Company research returned incomplete data: {result}")
+                return {
+                    "summary": f"Unable to gather detailed information about {company_name}",
+                    "business_model": None,
+                    "recent_news": [],
+                    "culture_notes": None,
+                    "key_facts": [],
+                }
+
+        except Exception as e:
+            logger.error(f"Company research failed: {e}")
+            return {"summary": None, "business_model": None, "recent_news": [], "culture_notes": None, "key_facts": []}
+
+    def generate_interview_prep(self, company_name: str, job_title: str, company_research: Dict[str, Any]) -> Dict[str, Any]:
+        """Generate interview questions and questions to ask based on company research."""
+        gemini_rate_limiter.wait()
+
+        research_context = f"""
+Company Summary: {company_research.get('summary', 'N/A')}
+Business Model: {company_research.get('business_model', 'N/A')}
+Culture Notes: {company_research.get('culture_notes', 'N/A')}
+Key Facts: {', '.join(company_research.get('key_facts', []))}
+"""
+
+        prompt = f"""Generate interview preparation questions for this role. Respond ONLY with valid JSON, no markdown formatting.
+
+Company: {company_name}
+Job Title: {job_title}
+
+Background:{research_context}
+
+Generate interview questions and questions to ask the interviewer in this JSON format (respond with ONLY the JSON):
+{{
+  "interview_questions": [
+    {{"question": "Question 1", "category": "behavioral", "answer_hint": "Hint for how to answer"}},
+    {{"question": "Question 2", "category": "technical", "answer_hint": "Hint for how to answer"}},
+    ...10 total questions...
+  ],
+  "questions_to_ask": [
+    "What does success look like in the first 90 days?",
+    "How do you measure performance for this role?",
+    ...5-8 questions to ask the interviewer...
+  ]
+}}
+
+Categories: behavioral, technical, situational
+Include at least 3-4 of each category type.
+Questions should be specific to a {job_title} role at {company_name}."""
+
+        try:
+            response = self.model.generate_content(prompt, generation_config=genai.types.GenerationConfig(
+                temperature=0.7,
+                max_output_tokens=1200,
+            ))
+
+            result = self._extract_json(response.text)
+            if result and result.get("interview_questions"):
+                logger.info(f"Generated {len(result['interview_questions'])} interview questions for {company_name}")
+                return result
+            else:
+                logger.warning(f"Interview question generation returned incomplete data: {result}")
+                return {"interview_questions": [], "questions_to_ask": []}
+
+        except Exception as e:
+            logger.error(f"Interview question generation failed: {e}")
+            return {"interview_questions": [], "questions_to_ask": []}
+
+    def run_quiz(self, company_name: str, job_title: str, question: str, user_answer: str, company_research: Dict[str, Any]) -> Dict[str, Any]:
+        """Score a user's answer to an interview question."""
+        gemini_rate_limiter.wait()
+
+        research_context = f"""
+Company: {company_name}
+Role: {job_title}
+Company Summary: {company_research.get('summary', 'N/A')}
+"""
+
+        prompt = f"""Score this answer to an interview question. Respond ONLY with valid JSON, no markdown formatting.
+
+{research_context}
+
+Interview Question: {question}
+
+Candidate's Answer: {user_answer}
+
+Score the answer and provide feedback in this JSON format (respond with ONLY the JSON):
+{{
+  "score": 7,
+  "feedback": "This is a strong answer because... Could be improved by...",
+  "suggested_answer": "Here's how a strong answer might address this question..."
+}}
+
+Score: 0-10 where 10 is excellent, 5 is average, 0 is not addressing the question.
+Feedback: 2-3 sentences of constructive feedback.
+Suggested answer: A 2-3 sentence example of a strong answer.
+Consider the {job_title} role at {company_name} when scoring."""
+
+        try:
+            response = self.model.generate_content(prompt, generation_config=genai.types.GenerationConfig(
+                temperature=0.7,
+                max_output_tokens=400,
+            ))
+
+            result = self._extract_json(response.text)
+            if result and "score" in result:
+                logger.info(f"Quiz answer scored: {result.get('score')}/10")
+                return result
+            else:
+                logger.warning(f"Quiz scoring returned incomplete data: {result}")
+                return {"score": 5, "feedback": "Unable to score this answer", "suggested_answer": None}
+
+        except Exception as e:
+            logger.error(f"Quiz scoring failed: {e}")
+            return {"score": 0, "feedback": "Error scoring answer", "suggested_answer": None}
