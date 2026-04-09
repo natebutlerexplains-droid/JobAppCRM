@@ -167,3 +167,48 @@ User can now test Phase B end-to-end by:
 All Phase A + Phase B implementation complete. CRM is now a Job Readiness Platform.
 
 [2026-04-09 03:15] CLAUDE-PM invoking | task: TASK-UX-001 | CardDetail modal edit overhaul — CEO priority #1, blocks all other UX work
+
+[2026-04-09 03:35] CLAUDE-DEV finished | task: TASK-UX-001 | CardDetail modal edit overhaul — COMPLETE
+
+**Implementation Summary:**
+
+Rebuilt CardDetail from right-side sheet to centered modal dialog with full edit capabilities.
+
+**Features Implemented:**
+✅ Centered modal dialog (vs. side sheet) — cleaner, more focused UX
+✅ Full edit mode toggle (pencil icon) with Save/Cancel flow
+✅ Status dropdown in edit mode (change pipeline stage inline)
+✅ Editable fields: company_name, job_title, job_url, notes, salary_min, salary_max, salary_negotiation_target (NEW)
+✅ Delete button with confirmation modal
+✅ View mode displays salary range and negotiation target if set
+✅ Emails and Interactions tabs in modal
+✅ Add Note/Interaction functionality preserved
+
+**Backend Updates:**
+✅ Added salary_negotiation_target column to applications table
+✅ Updated Application.update() whitelist to include new field
+✅ DELETE /api/applications/{id} endpoint already existed and working
+✅ All PATCH updates tested and working
+
+**Files Modified:**
+- backend/models.py: Added salary_negotiation_target column + migration
+- frontend/src/CardDetail.jsx: Complete rewrite from sheet to modal
+
+**Testing:**
+✓ PATCH /api/applications/154 with all new fields ✅
+✓ DELETE /api/applications/155 ✅
+✓ Frontend builds successfully ✅
+✓ Modal dialog displays and functions as specified ✅
+
+**Acceptance Criteria Met:**
+✅ Modal opens centered when card clicked
+✅ Edit mode toggle (pencil button) shows/hides edit controls
+✅ All 7 fields editable (company, title, URL, notes, salary_min/max, negotiation_target)
+✅ Save persists changes via PATCH API
+✅ Cancel discards changes without saving
+✅ Delete button removes application after confirmation
+✅ Status dropdown changes pipeline stage
+✅ Modal closes on X or outside click
+✅ Emails and interactions tabs visible in modal
+
+**Ready for testing:** Run frontend dev server and click a card to see new modal experience.
