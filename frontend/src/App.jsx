@@ -8,6 +8,8 @@ import { UnrelatedEmails } from './UnrelatedEmails'
 import { JobLeads } from './JobLeads'
 import { Settings } from './Settings'
 import { ClassifierGauge } from './ClassifierGauge'
+import { InterviewPrepPage } from './InterviewPrepPage'
+import { PrepHistory } from './PrepHistory'
 import './App.css'
 
 function App() {
@@ -20,7 +22,8 @@ function App() {
   const [selectedApp, setSelectedApp] = useState(null)
   const [showCardDetail, setShowCardDetail] = useState(false)
   const [showNewAppForm, setShowNewAppForm] = useState(false)
-  const [currentPage, setCurrentPage] = useState('dashboard') // 'dashboard' or 'settings'
+  const [currentPage, setCurrentPage] = useState('dashboard') // 'dashboard', 'settings', 'prep', 'prep-history'
+  const [prepApplicationId, setPrepApplicationId] = useState(null)
   const [searchTerm, setSearchTerm] = useState('')
   const [statusFilter, setStatusFilter] = useState('')
   const [emailTypeFilter, setEmailTypeFilter] = useState('')
@@ -139,6 +142,16 @@ function App() {
               Dashboard
             </button>
             <button
+              onClick={() => setCurrentPage('prep-history')}
+              className={`px-3 py-2 rounded font-medium transition-colors ${
+                currentPage === 'prep-history'
+                  ? 'bg-primary text-primary-foreground'
+                  : 'text-muted-foreground hover:text-foreground hover:bg-muted'
+              }`}
+            >
+              Interview Prep
+            </button>
+            <button
               onClick={() => setCurrentPage('settings')}
               className={`px-3 py-2 rounded font-medium transition-colors ${
                 currentPage === 'settings'
@@ -159,6 +172,21 @@ function App() {
       <main className="flex-1 flex flex-col bg-background">
         <div className="flex-1 max-w-7xl mx-auto w-full px-4 py-8">
           {currentPage === 'settings' && <Settings />}
+          {currentPage === 'prep-history' && (
+            <PrepHistory
+              onSelectPrep={(appId) => {
+                setPrepApplicationId(appId)
+                setCurrentPage('prep')
+              }}
+            />
+          )}
+          {currentPage === 'prep' && prepApplicationId && (
+            <InterviewPrepPage
+              applicationId={prepApplicationId}
+              application={applications.find(a => a.id === prepApplicationId)}
+              onBack={() => setCurrentPage('prep-history')}
+            />
+          )}
           {currentPage === 'dashboard' && (
             <>
 
@@ -250,6 +278,10 @@ function App() {
             suggestions={suggestions}
             onCardClick={handleCardClick}
             onApplicationsChange={handleApplicationsChange}
+            onPrepClick={(app) => {
+              setCurrentPage('prep')
+              setPrepApplicationId(app.id)
+            }}
           />
         </div>
 
