@@ -143,6 +143,21 @@ class Database:
         )
         """)
 
+        # INTERVIEW_PREP table (user interview preparation data)
+        cursor.execute("""
+        CREATE TABLE IF NOT EXISTS interview_prep (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            application_id INTEGER NOT NULL,
+            company_research TEXT,
+            interview_questions TEXT,
+            questions_to_ask TEXT,
+            quiz_results TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (application_id) REFERENCES applications(id) ON DELETE CASCADE
+        )
+        """)
+
         # Safe migrations — add new columns if they don't exist
         try:
             cursor.execute("ALTER TABLE emails ADD COLUMN trashed INTEGER DEFAULT 0")
@@ -671,3 +686,109 @@ class ClassificationFeedback:
         )
         row = cursor.fetchone()
         return dict(row) if row else None
+
+
+class InterviewPrep:
+    """Interview preparation data for applications (research, questions, quiz results)."""
+
+    @staticmethod
+    def get_or_create(db: Database, app_id: int) -> Dict[str, Any]:
+        """Fetch existing interview prep or create new row for application."""
+        cursor = db.execute(
+            "SELECT * FROM interview_prep WHERE application_id = ?",
+            (app_id,)
+        )
+        row = cursor.fetchone()
+        if row:
+            return dict(row)
+
+        # Create new prep row
+        cursor = db.execute(
+            """INSERT INTO interview_prep (application_id)
+               VALUES (?)""",
+            (app_id,)
+        )
+        db.commit()
+        prep_id = cursor.lastrowid
+
+        # Return the newly created row
+        return InterviewPrep.get_by_id(db, prep_id)
+
+    @staticmethod
+    def get_by_id(db: Database, prep_id: int) -> Optional[Dict[str, Any]]:
+        """Fetch interview prep by ID."""
+        cursor = db.execute(
+            "SELECT * FROM interview_prep WHERE id = ?",
+            (prep_id,)
+        )
+        row = cursor.fetchone()
+        return dict(row) if row else None
+
+    @staticmethod
+    def get_by_application(db: Database, app_id: int) -> Optional[Dict[str, Any]]:
+        """Fetch interview prep for an application."""
+        cursor = db.execute(
+            "SELECT * FROM interview_prep WHERE application_id = ?",
+            (app_id,)
+        )
+        row = cursor.fetchone()
+        return dict(row) if row else None
+
+    @staticmethod
+    def update(db: Database, prep_id: int, fields: Dict[str, Any]) -> bool:
+        """Update interview prep fields (company_research, interview_questions, etc)."""
+        if not fields:
+            return False
+
+        # Build dynamic UPDATE statement
+        set_clauses = []
+        values = []
+        for key, value in fields.items():
+            if key not in ["id", "application_id", "created_at"]:
+                set_clauses.append(f"{key} = ?")
+                # Convert dicts/lists to JSON strings
+                if isinstance(value, (dict, list)):
+                    values.append(json.dumps(value))
+                else:
+                    values.append(value)
+
+        if not set_clauses:
+            return False
+
+        set_clauses.append("updated_at = CURRENT_TIMESTAMP")
+        values.append(prep_id)
+
+        sql = f"UPDATE interview_prep SET {', '.join(set_clauses)} WHERE id = ?"
+        db.execute(sql, values)
+        db.commit()
+        return True
+
+    @staticmethod
+    def get_all_with_applications(db: Database) -> List[Dict[str, Any]]:
+        """Get all interview prep sessions joined with application info."""
+        cursor = db.execute(
+            """SELECT ip.*, a.company_name, a.job_title
+               FROM interview_prep ip
+               JOIN applications a ON ip.application_id = a.id
+               ORDER BY ip.created_at DESC"""
+        )
+        rows = cursor.fetchall()
+        result = []
+        for row in rows:
+            row_dict = dict(row)
+            # Count quiz results if present
+            quiz_results = []
+            if row_dict.get("quiz_results"):
+                try:
+                    quiz_results = json.loads(row_dict["quiz_results"])
+                except (json.JSONDecodeError, TypeError):
+                    pass
+            row_dict["quiz_count"] = len(quiz_results)
+            # Parse quiz results for average score
+            if quiz_results:
+                scores = [q.get("score", 0) for q in quiz_results if isinstance(q, dict)]
+                row_dict["quiz_average"] = round(sum(scores) / len(scores), 1) if scores else None
+            else:
+                row_dict["quiz_average"] = None
+            result.append(row_dict)
+        return result
