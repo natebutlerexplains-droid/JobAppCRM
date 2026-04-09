@@ -129,6 +129,20 @@ class Database:
         )
         """)
 
+        # CLASSIFICATION_FEEDBACK table (user corrections for Gemini training)
+        cursor.execute("""
+        CREATE TABLE IF NOT EXISTS classification_feedback (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            email_id INTEGER NOT NULL,
+            original_category TEXT NOT NULL,
+            corrected_category TEXT NOT NULL,
+            reason_code TEXT NOT NULL,
+            reason_label TEXT NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (email_id) REFERENCES emails(id) ON DELETE CASCADE
+        )
+        """)
+
         self.connection.commit()
 
     def _sync_logs_allows_cancelled(self) -> bool:
@@ -516,3 +530,80 @@ class AppConfig:
     def set_next_sync_time(db: Database, iso_time: str):
         """Update the next scheduled sync time."""
         AppConfig.set(db, "next_sync_time", iso_time)
+
+
+class ClassificationFeedback:
+    """User-submitted corrections to email classifications (training data for Gemini)."""
+
+    @staticmethod
+    def create(db: Database, email_id: int, original_category: str,
+               corrected_category: str, reason_code: str, reason_label: str) -> int:
+        """Store a user correction for a misclassified email."""
+        cursor = db.execute(
+            """INSERT INTO classification_feedback
+               (email_id, original_category, corrected_category, reason_code, reason_label)
+               VALUES (?, ?, ?, ?, ?)""",
+            (email_id, original_category, corrected_category, reason_code, reason_label)
+        )
+        db.commit()
+        return cursor.lastrowid
+
+    @staticmethod
+    def get_recent(db: Database, limit: int = 20) -> List[Dict[str, Any]]:
+        """Get recent feedback entries joined with email data for few-shot injection into Gemini."""
+        cursor = db.execute(
+            """SELECT cf.*, e.subject, e.sender, e.body_excerpt
+               FROM classification_feedback cf
+               JOIN emails e ON cf.email_id = e.id
+               ORDER BY cf.created_at DESC
+               LIMIT ?""",
+            (limit,)
+        )
+        return [dict(row) for row in cursor.fetchall()]
+
+    @staticmethod
+    def get_stats(db: Database) -> Dict[str, Any]:
+        """Return accuracy and training data metrics for the classifier gauge."""
+        total_classified = db.execute(
+            "SELECT COUNT(*) as cnt FROM emails WHERE gemini_classification IS NOT NULL"
+        ).fetchone()["cnt"]
+
+        total_corrected = db.execute(
+            "SELECT COUNT(*) as cnt FROM classification_feedback"
+        ).fetchone()["cnt"]
+
+        # Count corrections by target category
+        by_target_rows = db.execute(
+            """SELECT corrected_category, COUNT(*) as cnt
+               FROM classification_feedback
+               GROUP BY corrected_category"""
+        ).fetchall()
+        by_target = {row["corrected_category"]: row["cnt"] for row in by_target_rows}
+
+        # Calculate accuracy: (total_classified - total_corrected) / total_classified * 100
+        # Honest signal: drops when corrections are found
+        if total_classified > 0:
+            accuracy_score = round(
+                ((total_classified - total_corrected) / total_classified) * 100,
+                1
+            )
+        else:
+            accuracy_score = 100.0
+
+        return {
+            "total_classified": total_classified,
+            "total_corrected": total_corrected,
+            "training_examples": total_corrected,
+            "accuracy_score": accuracy_score,
+            "by_target": by_target,
+        }
+
+    @staticmethod
+    def get_for_email(db: Database, email_id: int) -> Optional[Dict[str, Any]]:
+        """Check if feedback already exists for this email (most recent)."""
+        cursor = db.execute(
+            "SELECT * FROM classification_feedback WHERE email_id = ? ORDER BY created_at DESC LIMIT 1",
+            (email_id,)
+        )
+        row = cursor.fetchone()
+        return dict(row) if row else None

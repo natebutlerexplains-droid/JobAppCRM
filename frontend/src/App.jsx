@@ -276,6 +276,9 @@ function App() {
             onError={(err) => {
               setError(err)
             }}
+            onReclassified={() => {
+              loadData()
+            }}
           />
         )}
 

@@ -10,7 +10,7 @@ from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
 
 from config import Config, logger
-from models import Database, Application, Email, StageSuggestion, SyncLog
+from models import Database, Application, Email, StageSuggestion, SyncLog, ClassificationFeedback
 from email_processor import EmailProcessor
 
 # Configure logging
@@ -197,6 +197,23 @@ def init_scheduler():
     update_scheduler_for_schedule(schedule)
     scheduler.start()
     logger.info(f"APScheduler initialized with schedule: {schedule}")
+
+
+# Predefined reason codes for user corrections
+VALID_REASON_CODES = {
+    "application_confirmation": {
+        "OBVIOUS_LANGUAGE": "Contains obvious confirmation language ('Thank you for applying', 'We received your application', 'application has been received')",
+        "KNOWN_HR_PLATFORM": "From a known HR platform (ADP, Workday, Greenhouse, Lever) that was missed by rules",
+        "CLEAR_SUBJECT": "Subject line clearly indicates application ('Indeed Application:', company name + role)",
+        "LINKEDIN_PATTERN": "LinkedIn application confirmation pattern not matched",
+        "BODY_TOO_VAGUE": "Body content was too sparse or junk-filled for Gemini to parse correctly",
+    },
+    "job_lead": {
+        "JOB_RECOMMENDATIONS": "Email contains job recommendations sent to me",
+        "JOB_ALERT": "Job alert from a job board I subscribed to",
+        "RECRUITER_OUTREACH": "Recruiter outreach about job opportunities",
+    }
+}
 
 
 # Deterministic email classifier (runs BEFORE Gemini to handle clear-cut cases)
@@ -1005,6 +1022,152 @@ def reclassify_emails():
 
     except Exception as e:
         logger.error(f"Error reclassifying emails: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/emails/<int:email_id>/correct", methods=["POST"])
+def correct_email_classification(email_id):
+    """Submit a user correction for a misclassified email."""
+    try:
+        data = request.json or {}
+        corrected_category = data.get("corrected_category")
+        reason_code = data.get("reason_code")
+
+        # Validate inputs
+        if not corrected_category or not reason_code:
+            return jsonify({"error": "corrected_category and reason_code are required"}), 400
+
+        # Validate corrected_category
+        if corrected_category not in VALID_REASON_CODES:
+            return jsonify({
+                "error": f"corrected_category must be one of: {list(VALID_REASON_CODES.keys())}"
+            }), 400
+
+        # Validate reason_code for that category
+        valid_codes = VALID_REASON_CODES[corrected_category]
+        if reason_code not in valid_codes:
+            return jsonify({
+                "error": f"reason_code '{reason_code}' invalid for category '{corrected_category}'"
+            }), 400
+
+        reason_label = valid_codes[reason_code]
+
+        # Fetch the email
+        email = Email.get_by_id(db, email_id)
+        if not email:
+            return jsonify({"error": "Email not found"}), 404
+
+        # Determine original_category from stored gemini_classification
+        original_category = "unrelated"
+        if email.get("gemini_classification"):
+            try:
+                gc = json.loads(email["gemini_classification"])
+                original_category = gc.get("category", "unrelated")
+            except (json.JSONDecodeError, TypeError):
+                pass
+
+        # Store feedback
+        feedback_id = ClassificationFeedback.create(
+            db,
+            email_id=email_id,
+            original_category=original_category,
+            corrected_category=corrected_category,
+            reason_code=reason_code,
+            reason_label=reason_label,
+        )
+
+        # Update the email's gemini_classification immediately to reflect the correction
+        updated_classification = {
+            "category": corrected_category,
+            "is_job_related": True,
+            "confidence": 1.0,
+            "corrected_by_user": True,
+            "reason_code": reason_code,
+        }
+        db.execute(
+            "UPDATE emails SET gemini_classification = ? WHERE id = ?",
+            (json.dumps(updated_classification), email_id)
+        )
+
+        # If corrected to application_confirmation, trigger linking/creation
+        if corrected_category == "application_confirmation":
+            processor = EmailProcessor(db)
+            subject = email["subject"] or ""
+            body_excerpt = email["body_excerpt"] or ""
+            applications = Application.get_all(db)
+            best_match = None
+            best_score = 0.7
+
+            for application in applications:
+                score = processor.linker.semantic_match_email_to_application(
+                    subject, body_excerpt, application["company_name"], application["job_title"]
+                )
+                if score > best_score:
+                    best_score = score
+                    best_match = application
+
+            if best_match:
+                Email.link_to_application(db, email_id, best_match["id"])
+                linked_to = best_match["id"]
+                app_created = False
+                logger.info(f"Corrected email {email_id} linked to existing app {best_match['id']}")
+            else:
+                # Attempt extraction with Gemini before creating Unknown Company
+                try:
+                    extraction = processor.classifier.extract_application_info(
+                        subject, body_excerpt, email["sender"] or ""
+                    )
+                    company_name = (extraction or {}).get("company_name") or "Unknown Company"
+                    job_title = (extraction or {}).get("job_title") or "Unknown Position"
+                except Exception:
+                    company_name = "Unknown Company"
+                    job_title = "Unknown Position"
+
+                new_app_id = Application.create(
+                    db,
+                    company_name=company_name,
+                    job_title=job_title,
+                    date_submitted=datetime.now().strftime("%Y-%m-%d"),
+                    job_url=""
+                )
+                Email.link_to_application(db, email_id, new_app_id)
+                linked_to = new_app_id
+                app_created = True
+                logger.info(f"Corrected email {email_id} linked to new app {new_app_id} ({company_name})")
+
+            db.commit()
+            return jsonify({
+                "feedback_id": feedback_id,
+                "email_id": email_id,
+                "corrected_category": corrected_category,
+                "linked_to_app_id": linked_to,
+                "app_created": app_created,
+                "message": "Correction saved and email linked to application",
+            }), 200
+
+        # If corrected to job_lead, no linking needed — just category update
+        db.commit()
+        logger.info(f"Corrected email {email_id} to job_lead")
+        return jsonify({
+            "feedback_id": feedback_id,
+            "email_id": email_id,
+            "corrected_category": corrected_category,
+            "message": "Correction saved, email reclassified as job lead",
+        }), 200
+
+    except Exception as e:
+        logger.error(f"Error correcting email classification: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/classifier/stats", methods=["GET"])
+def get_classifier_stats():
+    """Return classifier accuracy and training data metrics for the gauge."""
+    try:
+        stats = ClassificationFeedback.get_stats(db)
+        return jsonify(stats), 200
+    except Exception as e:
+        logger.error(f"Error fetching classifier stats: {e}")
         return jsonify({"error": str(e)}), 500
 
 

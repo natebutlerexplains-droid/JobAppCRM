@@ -1,14 +1,37 @@
 import { useState, useEffect } from 'react'
 import { Badge } from '@/components/ui/badge'
-import { getNonJobRelatedEmails, reclassifyEmails } from './api'
+import { getNonJobRelatedEmails, reclassifyEmails, correctEmailClassification } from './api'
+import { ClassifierGauge } from './ClassifierGauge'
 
-export function UnrelatedEmails({ onError }) {
+// Predefined reason codes for user corrections
+const REASON_CODES = {
+  application_confirmation: [
+    { code: 'OBVIOUS_LANGUAGE', label: "Contains obvious confirmation language (e.g. 'Thank you for applying')" },
+    { code: 'KNOWN_HR_PLATFORM', label: "From a known HR platform missed by rules (ADP, Workday, Greenhouse)" },
+    { code: 'CLEAR_SUBJECT', label: "Subject line clearly indicates application" },
+    { code: 'LINKEDIN_PATTERN', label: "LinkedIn confirmation pattern not matched" },
+    { code: 'BODY_TOO_VAGUE', label: "Body was too sparse or junk-filled for Gemini" },
+  ],
+  job_lead: [
+    { code: 'JOB_RECOMMENDATIONS', label: "Contains job recommendations sent to me" },
+    { code: 'JOB_ALERT', label: "Job alert from a subscribed job board" },
+    { code: 'RECRUITER_OUTREACH', label: "Recruiter outreach about opportunities" },
+  ]
+}
+
+export function UnrelatedEmails({ onError, onReclassified }) {
   const [isOpen, setIsOpen] = useState(false)
   const [emails, setEmails] = useState([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
   const [reclassifying, setReclassifying] = useState(false)
   const [reclassifyResult, setReclassifyResult] = useState(null)
+  // Per-email correction state
+  const [correctingEmailId, setCorrectingEmailId] = useState(null)
+  const [pendingCategory, setPendingCategory] = useState(null)
+  const [selectedReason, setSelectedReason] = useState('')
+  const [submitting, setSubmitting] = useState(false)
+  const [gaugeRefreshTrigger, setGaugeRefreshTrigger] = useState(0)
 
   // Load non-job-related emails when component mounts
   useEffect(() => {
@@ -57,19 +80,46 @@ export function UnrelatedEmails({ onError }) {
     }
   }
 
+  const handleCorrectionSubmit = async (emailId) => {
+    if (!selectedReason) return
+    setSubmitting(true)
+    try {
+      await correctEmailClassification(emailId, pendingCategory, selectedReason)
+      // Remove the email from local state immediately (optimistic)
+      setEmails(prev => prev.filter(e => e.id !== emailId))
+      // Clear picker state
+      setCorrectingEmailId(null)
+      setPendingCategory(null)
+      setSelectedReason('')
+      // Trigger gauge refresh and App data reload
+      setGaugeRefreshTrigger(prev => prev + 1)
+      if (onReclassified) {
+        onReclassified()
+      }
+    } catch (err) {
+      // Local error, don't bubble to full-screen error
+      const errorMsg = err.response?.data?.error || err.message || 'Failed to submit correction'
+      setError(errorMsg)
+      console.error('Error submitting correction:', err)
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
   return (
     <div className="border-t bg-gray-50">
       <div className="max-w-7xl mx-auto px-4 py-4">
-        {/* Header with toggle */}
+        {/* Header with toggle and gauge */}
         <button
           onClick={() => setIsOpen(!isOpen)}
           className="w-full flex items-center justify-between py-2 hover:opacity-80 transition-opacity"
         >
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3 flex-wrap">
             <h3 className="font-semibold text-foreground">Unrelated Emails</h3>
             <Badge variant="outline" className="bg-gray-100 border-gray-300 text-gray-900">
               {emails.length}
             </Badge>
+            <ClassifierGauge refreshTrigger={gaugeRefreshTrigger} />
           </div>
           <span className="text-muted-foreground text-sm">
             {isOpen ? '▼' : '▶'}
@@ -146,6 +196,73 @@ export function UnrelatedEmails({ onError }) {
                 {email.body_excerpt && (
                   <div className="mt-2 p-2 bg-gray-50 rounded text-xs text-muted-foreground max-h-20 overflow-y-auto">
                     {email.body_excerpt.substring(0, 200)}...
+                  </div>
+                )}
+
+                {/* Per-card correction buttons */}
+                <div className="mt-3 flex gap-2">
+                  <button
+                    onClick={() => {
+                      setCorrectingEmailId(email.id)
+                      setPendingCategory('application_confirmation')
+                      setSelectedReason('')
+                    }}
+                    className="px-3 py-1 text-xs bg-green-100 hover:bg-green-200 text-green-800 border border-green-300 rounded font-medium transition-colors"
+                  >
+                    → Move to Submitted
+                  </button>
+                  <button
+                    onClick={() => {
+                      setCorrectingEmailId(email.id)
+                      setPendingCategory('job_lead')
+                      setSelectedReason('')
+                    }}
+                    className="px-3 py-1 text-xs bg-blue-100 hover:bg-blue-200 text-blue-800 border border-blue-300 rounded font-medium transition-colors"
+                  >
+                    → Move to Job Leads
+                  </button>
+                </div>
+
+                {/* Inline reason picker — only for active card */}
+                {correctingEmailId === email.id && pendingCategory && (
+                  <div className="mt-3 p-3 bg-yellow-50 border border-yellow-200 rounded">
+                    <p className="text-xs font-semibold text-yellow-900 mb-2">
+                      Why was this misclassified?
+                    </p>
+                    <div className="flex flex-col gap-1 mb-3">
+                      {REASON_CODES[pendingCategory].map(({ code, label }) => (
+                        <label key={code} className="flex items-start gap-2 text-xs text-gray-700 cursor-pointer">
+                          <input
+                            type="radio"
+                            name={`reason-${email.id}`}
+                            value={code}
+                            checked={selectedReason === code}
+                            onChange={() => setSelectedReason(code)}
+                            className="mt-0.5 flex-shrink-0"
+                          />
+                          {label}
+                        </label>
+                      ))}
+                    </div>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => handleCorrectionSubmit(email.id)}
+                        disabled={!selectedReason || submitting}
+                        className="px-3 py-1 text-xs bg-yellow-600 hover:bg-yellow-700 text-white rounded font-medium disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                      >
+                        {submitting ? 'Saving...' : 'Confirm & Train Gemini'}
+                      </button>
+                      <button
+                        onClick={() => {
+                          setCorrectingEmailId(null)
+                          setPendingCategory(null)
+                          setSelectedReason('')
+                        }}
+                        className="px-3 py-1 text-xs bg-gray-200 hover:bg-gray-300 text-gray-700 rounded transition-colors"
+                      >
+                        Cancel
+                      </button>
+                    </div>
                   </div>
                 )}
               </div>

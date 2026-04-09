@@ -290,3 +290,96 @@ Respond with a JSON array of these objects. Be strict about what constitutes a j
         except Exception as e:
             logger.error(f"Batch classification failed: {e}")
             return [{"category": "unrelated", "is_job_related": False, "confidence": 0.0} for _ in emails]
+
+    def classify_email_with_feedback(self, subject: str, body: str, sender: str,
+                                     feedback_examples: list) -> Dict[str, Any]:
+        """Classify email with few-shot examples injected from user feedback.
+
+        Args:
+            subject: Email subject
+            body: Email body
+            sender: Email sender
+            feedback_examples: List of dicts from ClassificationFeedback.get_recent() with training examples
+
+        Returns:
+            Classification dict with is_job_related, category, confidence, etc.
+        """
+        gemini_rate_limiter.wait()
+
+        # Clean body for classification
+        clean_body = self._clean_body_for_classification(body)[:1000]
+
+        # Build few-shot block from feedback examples
+        few_shot_block = ""
+        if feedback_examples:
+            examples = []
+            for ex in feedback_examples[:10]:  # Cap at 10 to stay under token budget
+                ex_body = self._clean_body_for_classification(ex.get("body_excerpt", ""))[:300]
+                examples.append(
+                    f'  Subject: "{ex["subject"]}"\n'
+                    f'  Sender: "{ex["sender"]}"\n'
+                    f'  Body: "{ex_body}"\n'
+                    f'  Reason: {ex["reason_label"]}\n'
+                    f'  → Correct category: "{ex["corrected_category"]}"'
+                )
+            few_shot_block = (
+                "\n\nUSER-CORRECTED EXAMPLES (high-confidence training signal — follow these patterns):\n"
+                + "\n\n".join(examples)
+                + "\n"
+            )
+
+        # Build full prompt: reuse existing prompt structure with few-shot injection
+        prompt = f"""You are an email classifier for job applications. Analyze the following email and respond ONLY with JSON, no markdown formatting.
+
+Email Subject: {subject}
+Email Body: {clean_body}
+Sender: {sender}
+
+Classify as ONE of:
+1. "application_confirmation" - Email confirming that YOUR APPLICATION WAS RECEIVED (e.g., "Your application has been received", "Application status update", HR confirmation)
+2. "job_lead" - Job recommendations/matches sent to you that YOU could apply to (e.g., "We found these jobs for you", "Recommended roles", "Job matches based on your profile")
+3. "interview_request" - Request for an interview or next steps
+4. "rejection" - Application rejected
+5. "more_info_needed" - Requesting more information from you
+6. "unrelated" - Not job-related (newsletters, notifications, marketing, social emails)
+
+KEYWORDS FOR application_confirmation: "application received", "application status", "we received your", "confirmation of application", "application submitted", "Indeed Application:", "your application was sent", "application to", "thank you for applying", "thank you for your application", "has been received"
+
+KEYWORDS FOR job_lead: "we found", "recommended for you", "job match", "based on your profile", "we think you'd be great"
+
+KEYWORDS FOR unrelated: "newsletter", "notification", "social", "book recommendation", "sign in detected", "weekly digest"
+
+SENDER GUIDANCE:
+- Emails from HR platforms (ADP domains like *.hr@adp.com, Workday, Greenhouse, Indeed, Lever, Smartrecruiters) about applications → always application_confirmation
+- Emails from LinkedIn job alerts (jobs-noreply@linkedin.com) with patterns like "your application was sent" → application_confirmation
+- Do NOT classify HR platform emails as unrelated even if body is unclear
+{few_shot_block}
+Respond with:
+{{
+  "is_job_related": boolean,
+  "category": "application_confirmation|job_lead|interview_request|rejection|more_info_needed|unrelated",
+  "company_extracted": "string or null",
+  "job_title_extracted": "string or null",
+  "requires_action": boolean,
+  "action_summary": "string or null",
+  "confidence": 0.0-1.0
+}}
+
+If you cannot determine the information, set it to null. The subject line is the strongest signal — if subject mentions 'application' or 'applied' in the context of a job, lean toward application_confirmation even if the body is unclear."""
+
+        try:
+            response = self.model.generate_content(prompt, generation_config=genai.types.GenerationConfig(
+                temperature=0.1,
+                max_output_tokens=500,
+            ))
+
+            result = self._extract_json(response.text)
+            if result:
+                return result
+            else:
+                logger.error(f"Failed to parse Gemini response: {response.text[:500]}")
+                return {"category": "unrelated", "is_job_related": False, "confidence": 0.0}
+
+        except Exception as e:
+            logger.error(f"Gemini classification with feedback failed: {e}")
+            return {"category": "unrelated", "is_job_related": False, "confidence": 0.0}

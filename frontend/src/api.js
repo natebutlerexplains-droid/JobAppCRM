@@ -41,11 +41,16 @@ export const getJobLeads = () => api.get('/emails/job-leads')
 export const linkEmail = (emailId, appId) => api.patch(`/emails/${emailId}/link`, { app_id: appId })
 export const processUnlinkedEmails = (limit = null) => api.post('/emails/process-unlinked', { limit })
 export const reclassifyEmails = (category = 'unrelated', limit = 20) => api.post('/emails/reclassify', { category, limit })
+export const correctEmailClassification = (emailId, correctedCategory, reasonCode) =>
+  api.post(`/emails/${emailId}/correct`, { corrected_category: correctedCategory, reason_code: reasonCode })
 
 // Sync Logs
 export const getSyncLogs = (limit = 10) => api.get(`/sync-logs?limit=${limit}`)
 export const runEmailSync = () => api.post('/run-email-sync')
 export const cancelEmailSync = () => api.post('/cancel-email-sync')
+
+// Classifier Feedback & Training
+export const getClassifierStats = () => api.get('/classifier/stats')
 
 // Gemini Health
 export const getGeminiHealth = () => api.get('/gemini/health')
