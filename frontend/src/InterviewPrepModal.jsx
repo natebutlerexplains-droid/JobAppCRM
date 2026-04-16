@@ -96,14 +96,18 @@ export function InterviewPrepModal({ application, isOpen, onClose }) {
       title: 'Key Products & Services',
       icon: '📦',
       content: companyResearch?.key_products && (
-        <ul className="space-y-1">
-          {companyResearch.key_products.map((item, i) => (
-            <li key={i} className="flex gap-2">
-              <span className="text-blue-400">→</span>
-              {item}
-            </li>
-          ))}
-        </ul>
+        Array.isArray(companyResearch.key_products) ? (
+          <ul className="space-y-1">
+            {companyResearch.key_products.map((item, i) => (
+              <li key={i} className="flex gap-2">
+                <span className="text-blue-400">→</span>
+                {item}
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p>{companyResearch.key_products}</p>
+        )
       )
     },
     {
@@ -130,12 +134,16 @@ export function InterviewPrepModal({ application, isOpen, onClose }) {
     {
       title: 'Recent News',
       icon: '📰',
-      content: companyResearch?.recent_news && companyResearch.recent_news.length > 0 && (
-        <ul className="space-y-2">
-          {companyResearch.recent_news.map((news, i) => (
-            <li key={i} className="text-sm">{news}</li>
-          ))}
-        </ul>
+      content: companyResearch?.recent_news && (
+        Array.isArray(companyResearch.recent_news) ? (
+          <ul className="space-y-2">
+            {companyResearch.recent_news.map((news, i) => (
+              <li key={i} className="text-sm">{news}</li>
+            ))}
+          </ul>
+        ) : (
+          <p>{companyResearch.recent_news}</p>
+        )
       )
     },
     {
@@ -154,7 +162,7 @@ export function InterviewPrepModal({ application, isOpen, onClose }) {
     }
   ]
 
-  const questionsByCategory = interviewQuestions
+  const questionsByCategory = interviewQuestions && Array.isArray(interviewQuestions)
     ? interviewQuestions.reduce((acc, q) => {
         if (!acc[q.category]) acc[q.category] = []
         acc[q.category].push(q)
@@ -301,7 +309,7 @@ export function InterviewPrepModal({ application, isOpen, onClose }) {
                   ))}
                 </div>
 
-                {questionsToAsk && questionsToAsk.length > 0 && (
+                {questionsToAsk && Array.isArray(questionsToAsk) && questionsToAsk.length > 0 && (
                   <ResearchTile
                     title="Questions to Ask Them"
                     icon="🤔"
