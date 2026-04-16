@@ -20,6 +20,19 @@ export function ApplicationCard({ application, hasSuggestion, onClick, onDelete,
 
   const isHourly = application.pay_type === 'Hourly'
 
+  // Check if 48 hours have passed since submission and app is not in interview stage
+  const getFollowUpIndicator = () => {
+    if (application.status === 'Interview Started' || application.status === 'Denied' || application.status === 'Offered' || application.status === 'Archived') {
+      return null
+    }
+    const submittedDate = new Date(application.date_submitted)
+    const now = new Date()
+    const hoursPassed = (now - submittedDate) / (1000 * 60 * 60)
+    return hoursPassed >= 48
+  }
+
+  const showFollowUp = getFollowUpIndicator()
+
   const salaryDisplay = (() => {
     if (!application.salary_min && !application.salary_max) return null
     if (application.salary_min && application.salary_max) {
@@ -94,13 +107,18 @@ export function ApplicationCard({ application, hasSuggestion, onClick, onDelete,
       </div>
 
       {/* Suggestion badge */}
-      {hasSuggestion && (
-        <div className="mb-2">
+      <div className="mb-2 flex gap-2 flex-wrap">
+        {hasSuggestion && (
           <span className="inline-block px-2 py-0.5 bg-blue-600 text-white text-xs font-bold uppercase" style={{ borderRadius: '4px' }}>
             ⚡ Suggestion
           </span>
-        </div>
-      )}
+        )}
+        {showFollowUp && (
+          <span className="inline-block px-2 py-0.5 bg-orange-600 text-white text-xs font-bold uppercase" style={{ borderRadius: '4px' }}>
+            ⏰ Follow-up
+          </span>
+        )}
+      </div>
 
       {/* Interview Prep button — spacer pushes it to bottom */}
       <div className="mt-auto pt-3 border-t border-slate-700">

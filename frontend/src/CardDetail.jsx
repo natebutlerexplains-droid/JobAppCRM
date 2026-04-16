@@ -131,6 +131,32 @@ export function CardDetail({ application, isOpen, onClose, onSave, onNavToInterv
                       className="w-full px-3 py-2 bg-slate-800 border border-slate-600 text-white text-sm" style={{ borderRadius: '0px' }} />
                   </div>
 
+                  <div className="col-span-2">
+                    <label className="flex items-center gap-2">
+                      <input type="checkbox" checked={editData.is_staffing || false} onChange={e => setEditData({...editData, is_staffing: e.target.checked})}
+                        className="w-4 h-4" />
+                      <span className="text-xs font-bold text-slate-400 uppercase">Working with Staffing Company</span>
+                    </label>
+                  </div>
+
+                  {editData.is_staffing && (
+                    <div className="col-span-2">
+                      <label className="block text-xs font-bold text-slate-400 mb-1 uppercase">Staffing Company Name</label>
+                      <input type="text" value={editData.staffing_company_name || ''} onChange={e => setEditData({...editData, staffing_company_name: e.target.value})}
+                        placeholder="e.g., TrueBlue, Apex Group"
+                        className="w-full px-3 py-2 bg-slate-800 border border-slate-600 text-white text-sm" style={{ borderRadius: '0px' }} />
+                    </div>
+                  )}
+
+                  {editData.is_staffing && (
+                    <div className="col-span-2">
+                      <label className="block text-xs font-bold text-slate-400 mb-1 uppercase">End Client Name</label>
+                      <input type="text" value={editData.end_client_name || ''} onChange={e => setEditData({...editData, end_client_name: e.target.value})}
+                        placeholder="Actual company/client name"
+                        className="w-full px-3 py-2 bg-slate-800 border border-slate-600 text-white text-sm" style={{ borderRadius: '0px' }} />
+                    </div>
+                  )}
+
                   <div>
                     <label className="block text-xs font-bold text-slate-400 mb-1 uppercase">Status</label>
                     <select value={editData.status || ''} onChange={e => setEditData({...editData, status: e.target.value})}
@@ -251,6 +277,26 @@ export function CardDetail({ application, isOpen, onClose, onSave, onNavToInterv
                       <span className="text-slate-400">Job URL</span>
                       <a href={application.job_url} target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:text-blue-300 font-medium">View listing →</a>
                     </div>
+                  )}
+                  {application.is_staffing && (
+                    <>
+                      <div className="flex justify-between border-t border-slate-700/50 pt-2.5">
+                        <span className="text-slate-400">Type</span>
+                        <span className="text-white font-medium">Staffing Company</span>
+                      </div>
+                      {application.staffing_company_name && (
+                        <div className="flex justify-between border-t border-slate-700/50 pt-2.5">
+                          <span className="text-slate-400">Staffing Company</span>
+                          <span className="text-white font-medium">{application.staffing_company_name}</span>
+                        </div>
+                      )}
+                      {application.end_client_name && (
+                        <div className="flex justify-between border-t border-slate-700/50 pt-2.5">
+                          <span className="text-slate-400">End Client</span>
+                          <span className="text-white font-medium">{application.end_client_name}</span>
+                        </div>
+                      )}
+                    </>
                   )}
                 </div>
 

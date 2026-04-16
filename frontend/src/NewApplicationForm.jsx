@@ -17,6 +17,9 @@ export function NewApplicationForm({ isOpen, onClose, onSuccess }) {
     work_arrangement: '',
     work_arrangement_notes: '',
     notes: '',
+    is_staffing: false,
+    staffing_company_name: '',
+    end_client_name: '',
   })
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
@@ -48,12 +51,16 @@ export function NewApplicationForm({ isOpen, onClose, onSuccess }) {
         work_arrangement: formData.work_arrangement || null,
         work_arrangement_notes: formData.work_arrangement_notes || null,
         notes: formData.notes || null,
+        is_staffing: formData.is_staffing || false,
+        staffing_company_name: formData.staffing_company_name || null,
+        end_client_name: formData.end_client_name || null,
       })
       setFormData({
         company_name: '', job_title: '', date_submitted: new Date().toISOString().split('T')[0],
         job_url: '', company_website: '', employment_type: '', pay_type: '',
         salary_min: '', salary_max: '', salary_negotiation_target: '',
         work_arrangement: '', work_arrangement_notes: '', notes: '',
+        is_staffing: false, staffing_company_name: '', end_client_name: '',
       })
       if (onSuccess) onSuccess(response.data)
       onClose()
@@ -188,6 +195,31 @@ export function NewApplicationForm({ isOpen, onClose, onSuccess }) {
                       placeholder={isHourly ? '40' : '110000'} className={inputClass} style={{ borderRadius: '0px' }} />
                   </div>
                 </div>
+              )}
+            </div>
+
+            <div className="border-t border-slate-700 pt-5 space-y-4">
+              <div>
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input type="checkbox" checked={formData.is_staffing} onChange={(e) => setFormData({...formData, is_staffing: e.target.checked})}
+                    className="w-4 h-4" />
+                  <span className="text-xs font-bold text-slate-400 uppercase">Working with Staffing Company</span>
+                </label>
+              </div>
+
+              {formData.is_staffing && (
+                <>
+                  <div>
+                    <label className="block text-xs font-bold text-slate-400 mb-1.5 uppercase">Staffing Company Name</label>
+                    <input type="text" value={formData.staffing_company_name} onChange={set('staffing_company_name')}
+                      placeholder="e.g., TrueBlue, Apex Group" className={inputClass} style={{ borderRadius: '0px' }} />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-slate-400 mb-1.5 uppercase">End Client Name</label>
+                    <input type="text" value={formData.end_client_name} onChange={set('end_client_name')}
+                      placeholder="Actual company/client name" className={inputClass} style={{ borderRadius: '0px' }} />
+                  </div>
+                </>
               )}
             </div>
 
