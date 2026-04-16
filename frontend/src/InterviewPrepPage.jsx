@@ -2,18 +2,20 @@ import { useState } from 'react'
 import { ChevronDown } from 'lucide-react'
 import { researchCompanyPrep, generateInterviewQuestions } from './api'
 
-function ResearchTile({ title, icon, content, loading, isEmpty, isEditing, fieldValue, onFieldChange, onEdit, isFromFallback }) {
+function ResearchTile({ title, icon, content, loading, isEmpty, isEditing, fieldValue, onFieldChange, onEdit, isFromFallback, isError }) {
   const [expanded, setExpanded] = useState(true)
 
   if (isEmpty && !isEditing) {
     return (
-      <div className="bg-slate-800/50 border border-slate-700 p-4">
+      <div className={`border p-4 ${isError ? 'bg-red-900/20 border-red-700' : 'bg-slate-800/50 border-slate-700'}`}>
         <div className="flex justify-between items-start gap-2">
           <div>
-            <p className="text-xs font-bold text-slate-400">
+            <p className={`text-xs font-bold ${isError ? 'text-red-400' : 'text-slate-400'}`}>
               {icon} {title}
             </p>
-            <p className="text-xs text-slate-500 mt-1">No data available</p>
+            <p className={`text-xs mt-1 ${isError ? 'text-red-400' : 'text-slate-500'}`}>
+              {isError ? 'Research failed - API error' : 'No data available'}
+            </p>
           </div>
           <span className="text-xs text-slate-500 cursor-pointer hover:text-slate-300">ℹ️</span>
         </div>
@@ -323,6 +325,19 @@ ${companyResearch?.hiring_focus || 'N/A'}`
       {/* Research Section */}
       {companyResearch ? (
         <div className="space-y-3">
+          {/* Error State Banner */}
+          {companyResearch?.data_source === 'error' && (
+            <div className="bg-red-900/30 border border-red-700 text-red-300 p-4 text-sm rounded">
+              <p className="font-bold mb-1">⚠️ Research Failed - API Quota Exceeded</p>
+              <p>The Gemini API daily quota was exceeded. Please try again tomorrow when the quota resets. You can safely click "🔍 Research Company" to retry after the reset.</p>
+              {prep?.updated_at && (
+                <p className="text-xs text-red-400 mt-2">
+                  Last attempted: {new Date(prep.updated_at).toLocaleString()}
+                </p>
+              )}
+            </div>
+          )}
+
           <div className="flex items-center justify-between gap-2 flex-wrap">
             <div>
               <h3 className="font-bold text-white uppercase text-sm" style={{ letterSpacing: '0.5px' }}>
@@ -388,6 +403,7 @@ ${companyResearch?.hiring_focus || 'N/A'}`
                   onFieldChange={e => setEditedFields({...editedFields, [tile.fieldKey]: e.target.value})}
                   onEdit={() => console.log(`Saved ${tile.fieldKey}:`, editedFields[tile.fieldKey])}
                   isFromFallback={isFromFallback(tile.fieldKey)}
+                  isError={companyResearch?.data_source === 'error'}
                 />
               )
             })}

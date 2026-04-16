@@ -1462,9 +1462,16 @@ def research_company_prep(app_id):
             # If there's already good data from a previous research, return it
             if prep.get("company_research"):
                 logger.info(f"Returning existing research data for {app['company_name']}")
+                # Fetch updated prep
+                updated_prep = InterviewPrep.get_by_id(db, prep["id"])
+                # Return existing data with error status so frontend knows research failed
+                return jsonify(updated_prep), 200
             else:
-                # No existing data and new research failed
-                return jsonify({"error": "Research failed (API error or quota exceeded). Please try again later."}), 500
+                # No existing data and new research failed - return 429 for quota exceeded
+                return jsonify({
+                    "error": "Gemini API quota exceeded (limit: 20 requests/day per model). The daily quota will reset tomorrow.",
+                    "retry_after": "approximately 24 hours"
+                }), 429
 
         # Fetch updated prep
         updated_prep = InterviewPrep.get_by_id(db, prep["id"])
@@ -1472,6 +1479,12 @@ def research_company_prep(app_id):
 
     except Exception as e:
         logger.error(f"Error researching company: {e}")
+        # Check if it's a 429 quota error
+        if "429" in str(e) or "quota" in str(e).lower():
+            return jsonify({
+                "error": "Gemini API quota exceeded (limit: 20 requests/day per model). The daily quota will reset tomorrow.",
+                "retry_after": "approximately 24 hours"
+            }), 429
         return jsonify({"error": str(e)}), 500
 
 
