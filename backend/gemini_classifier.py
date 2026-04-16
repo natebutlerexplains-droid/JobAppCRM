@@ -48,7 +48,7 @@ class GeminiClassifier:
         logger.info(f"✅ Gemini API initialized with model: {Config.GEMINI_MODEL}")
 
     def _extract_json(self, text: str) -> Optional[Dict[str, Any]]:
-        """Extract JSON from text, handling markdown code fences."""
+        """Extract JSON from text, handling markdown code fences and truncated responses."""
         # Remove markdown code fences if present
         text = re.sub(r"```json\s*", "", text)
         text = re.sub(r"```\s*$", "", text)
@@ -56,8 +56,26 @@ class GeminiClassifier:
 
         try:
             return json.loads(text)
-        except json.JSONDecodeError:
-            logger.error(f"Failed to parse JSON: {text[:200]}")
+        except json.JSONDecodeError as e:
+            # Try to recover truncated JSON by finding the last complete object
+            logger.debug(f"Failed to parse JSON (full): {text[:300]}")
+
+            # Try removing incomplete trailing content
+            if text.endswith(','):
+                text = text[:-1]
+
+            # Find the last closing brace and try parsing up to that point
+            last_brace = text.rfind('}')
+            if last_brace > 0:
+                text_trimmed = text[:last_brace + 1]
+                try:
+                    result = json.loads(text_trimmed)
+                    logger.info(f"Successfully parsed truncated JSON after recovery")
+                    return result
+                except json.JSONDecodeError:
+                    pass
+
+            logger.error(f"Failed to parse JSON (even after recovery): {text[:200]}")
             return None
 
     def _decode_safelinks(self, text: str) -> str:
@@ -491,30 +509,38 @@ If you cannot determine the information, set it to null. The subject line is the
         if website_content:
             website_context = f"\n\nCompany website content (for reference):\n{website_content}"
 
-        prompt = f"""Research and extract detailed information for interview preparation.
-Company: {company_name}
-Job Title: {job_title}
-Website: {company_website or "Not provided"}
-Job URL: {job_url}{website_context}
+        prompt = f"""You are an expert research assistant. Research the following company and provide detailed, accurate information for interview preparation.
 
-Respond with ONLY valid JSON (no markdown):
+COMPANY INFO:
+- Company: {company_name}
+- Position: {job_title}
+- Company Website: {company_website or "Not provided"}
+- Job URL: {job_url}{website_context}
+
+INSTRUCTIONS:
+1. Respond with VALID, COMPLETE JSON only - no markdown code blocks, no explanations
+2. Fill in every field with actual information or null if not available
+3. Be accurate and specific
+4. Use website content if available
+
+REQUIRED JSON RESPONSE FORMAT (EXACT - must include all fields):
 {{
   "company_overview": "2-3 sentence summary of company mission and focus",
   "key_products": ["Product/service 1", "Product/service 2", "Key offering 3"],
-  "company_culture": "Description of company culture, values, work style",
-  "org_structure": "Basic description of how company is organized (teams, departments, reporting structure)",
-  "ceo_info": "CEO/founder name and brief background if available",
-  "recent_news": ["News item 1 from 2024-2026", "News item 2", "Relevant industry news"],
-  "industry_relevance": "Why this company/industry matters and current trends affecting the role",
-  "hiring_focus": "What this company is likely focusing on for {job_title} roles"
+  "company_culture": "Description of company culture, values, and work environment",
+  "org_structure": "How the company is organized (teams, departments, reporting structure)",
+  "ceo_info": "CEO/founder name and brief background",
+  "recent_news": ["News item 1", "News item 2", "News item 3"],
+  "industry_relevance": "Why this company and industry matter, and current trends",
+  "hiring_focus": "What this company focuses on when hiring for {job_title} roles"
 }}
 
-Focus on information useful for interviewing for a {job_title} role at {company_name}."""
+Now provide the complete JSON response with all 8 fields filled in:"""
 
         try:
             response = self.model.generate_content(prompt, generation_config=genai.types.GenerationConfig(
-                temperature=0.7,
-                max_output_tokens=1000,
+                temperature=0.5,
+                max_output_tokens=2000,
             ))
 
             logger.info(f"✅ Gemini API response received ({len(response.text)} chars)")

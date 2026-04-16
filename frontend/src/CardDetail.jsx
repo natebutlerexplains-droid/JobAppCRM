@@ -314,7 +314,15 @@ export function CardDetail({ application, isOpen, onClose, onSave, onNavToInterv
 
                 {/* Interactions */}
                 <div>
-                  <h3 className="font-bold text-white uppercase text-xs mb-3 text-slate-400" style={{ letterSpacing: '0.5px' }}>Interaction Log</h3>
+                  <div className="flex justify-between items-center mb-3">
+                    <h3 className="font-bold text-white uppercase text-xs text-slate-400" style={{ letterSpacing: '0.5px' }}>Interaction Log</h3>
+                    {!showAddInteraction && (
+                      <button onClick={() => setShowAddInteraction(true)}
+                        className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white font-bold uppercase text-xs transition-colors" style={{ borderRadius: '0px' }}>
+                        + Add
+                      </button>
+                    )}
+                  </div>
                   {loading && <p className="text-slate-400 text-sm">Loading...</p>}
                   <div className="space-y-2">
                     {interactions.length === 0 && !loading ? (
@@ -323,7 +331,7 @@ export function CardDetail({ application, isOpen, onClose, onSave, onNavToInterv
                       interactions.map(i => (
                         <div key={i.id} className="bg-slate-800/30 border-l-4 border-blue-500 pl-4 py-2.5">
                           <div className="flex justify-between items-start gap-2">
-                            <div>
+                            <div className="flex-1">
                               <p className="font-medium text-sm text-white capitalize">{i.type.replace(/_/g, ' ')}</p>
                               {i.content && <p className="text-sm text-slate-300 mt-0.5">{i.content}</p>}
                             </div>

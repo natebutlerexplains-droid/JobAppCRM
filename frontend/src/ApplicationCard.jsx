@@ -120,18 +120,6 @@ export function ApplicationCard({ application, hasSuggestion, onClick, onDelete,
         )}
       </div>
 
-      {/* Interview Prep button — spacer pushes it to bottom */}
-      <div className="mt-auto pt-3 border-t border-slate-700">
-        {!isArchived && (
-          <button
-            onClick={handlePrepClick}
-            className="w-full px-3 py-2 bg-slate-700 hover:bg-blue-600 text-slate-100 font-bold uppercase text-xs transition-colors"
-            style={{ borderRadius: '0px', letterSpacing: '0.5px' }}
-          >
-            📚 Interview Prep
-          </button>
-        )}
-      </div>
     </div>
   )
 }
