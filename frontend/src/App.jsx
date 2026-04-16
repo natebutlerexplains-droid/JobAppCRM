@@ -183,7 +183,7 @@ function App() {
                   applications={applications}
                   suggestions={suggestions}
                   onCardClick={handleCardClick}
-                  onApplicationsChange={handleApplicationsChange}
+                  onRefresh={loadData}
                 />
               </div>
 

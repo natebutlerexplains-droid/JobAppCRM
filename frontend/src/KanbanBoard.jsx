@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from 'react'
+import { useState, useMemo } from 'react'
 import {
   DndContext,
   closestCorners,
@@ -9,7 +9,6 @@ import {
   DragOverlay,
 } from '@dnd-kit/core'
 import {
-  arrayMove,
   SortableContext,
   sortableKeyboardCoordinates,
   verticalListSortingStrategy,
@@ -28,16 +27,8 @@ const COLUMNS = [
   { id: 'Offered', label: 'Offered' },
 ]
 
-// Draggable card wrapper
 function SortableCard({ id, application, hasSuggestion, onClick, onDelete, isArchived, onPrepClick }) {
-  const {
-    attributes,
-    listeners,
-    setNodeRef,
-    transform,
-    transition,
-    isDragging,
-  } = useSortable({ id })
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id })
 
   const style = {
     transform: CSS.Transform.toString(transform),
@@ -46,13 +37,7 @@ function SortableCard({ id, application, hasSuggestion, onClick, onDelete, isArc
   }
 
   return (
-    <div
-      ref={setNodeRef}
-      style={style}
-      {...attributes}
-      {...listeners}
-      className="touch-none"
-    >
+    <div ref={setNodeRef} style={style} {...attributes} {...listeners} className="touch-none">
       <ApplicationCard
         application={application}
         hasSuggestion={hasSuggestion}
@@ -65,48 +50,26 @@ function SortableCard({ id, application, hasSuggestion, onClick, onDelete, isArc
   )
 }
 
-// Draggable card overlay (shown while dragging)
 function DraggingCardOverlay({ application, hasSuggestion }) {
   return (
     <div className="transform scale-105 drop-shadow-2xl">
-      <ApplicationCard
-        application={application}
-        hasSuggestion={hasSuggestion}
-        isDragging={true}
-      />
+      <ApplicationCard application={application} hasSuggestion={hasSuggestion} isDragging={true} />
     </div>
   )
 }
 
-// Column container
 function KanbanColumn({ column, items, suggestions, onCardClick, onDelete, onPrepClick }) {
-  const { setNodeRef } = useSortable({
-    id: column.id,
-    data: {
-      type: 'Column',
-      column,
-    },
-  })
-
+  const { setNodeRef } = useSortable({ id: column.id, data: { type: 'Column', column } })
   const suggestionsMap = new Map(suggestions.map(s => [s.application_id, true]))
-  const isArchived = column.isTrash
 
   return (
     <div className="flex flex-col gap-8 min-h-[600px] w-full">
-      <div className={`font-black text-xl uppercase pb-4 border-b-2 text-center ${
-        isArchived
-          ? 'text-red-500 border-red-500'
-          : 'text-white border-slate-600'
-      }`} style={{ letterSpacing: '1px' }}>
+      <div className="font-black text-xl uppercase pb-4 border-b-2 text-center text-white border-slate-600" style={{ letterSpacing: '1px' }}>
         {column.label}
       </div>
       <div
         ref={setNodeRef}
-        className={`space-y-4 flex-1 p-6 min-h-[500px] transition-colors duration-200 border ${
-          isArchived
-            ? 'bg-slate-800/40 border-red-900/50'
-            : 'bg-slate-800/30 border-slate-700'
-        }`}
+        className="space-y-4 flex-1 p-6 min-h-[500px] transition-colors duration-200 border bg-slate-800/30 border-slate-700"
         style={{ borderRadius: '0px' }}
       >
         <SortableContext items={items.map(i => i.id)} strategy={verticalListSortingStrategy}>
@@ -118,22 +81,20 @@ function KanbanColumn({ column, items, suggestions, onCardClick, onDelete, onPre
               hasSuggestion={suggestionsMap.has(app.id)}
               onClick={() => onCardClick(app)}
               onDelete={onDelete}
-              isArchived={isArchived}
+              isArchived={false}
               onPrepClick={onPrepClick}
             />
           ))}
         </SortableContext>
         {items.length === 0 && (
-          <div className="text-center text-muted-foreground text-sm py-8">
-            No applications
-          </div>
+          <div className="text-center text-slate-500 text-sm py-8">No applications</div>
         )}
       </div>
     </div>
   )
 }
 
-export function KanbanBoard({ applications, suggestions, onCardClick, onApplicationsChange }) {
+export function KanbanBoard({ applications, suggestions, onCardClick, onRefresh }) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
   const [activeId, setActiveId] = useState(null)
@@ -142,135 +103,67 @@ export function KanbanBoard({ applications, suggestions, onCardClick, onApplicat
   const [showArchived, setShowArchived] = useState(false)
 
   const sensors = useSensors(
-    useSensor(PointerSensor, {
-      distance: 5,
-      delay: 50,
-    }),
-    useSensor(KeyboardSensor, {
-      coordinateGetter: sortableKeyboardCoordinates,
-    })
+    useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
   )
 
-  // Group applications by status
-  const getColumnItems = () => {
+  // Fully derived from applications prop — no local state, no sync issues
+  const items = useMemo(() => {
     const grouped = {}
     COLUMNS.forEach(col => {
-      grouped[col.id] = applications.filter(app => app.status === col.id)
+      grouped[col.id] = applications.filter(a => a.status === col.id)
     })
+    grouped['Archived'] = applications.filter(a => a.status === 'Archived')
     return grouped
-  }
-
-  const [items, setItems] = useState(getColumnItems())
-
-  // Sync items when applications change
-  useEffect(() => {
-    setItems(getColumnItems())
   }, [applications])
 
-  // Track drag start
-  const handleDragStart = (event) => {
-    setActiveId(event.active.id)
-  }
+  const handleDragStart = (event) => setActiveId(event.active.id)
 
-  // Handle delete/archive
   const handleDelete = async (appId) => {
     const app = applications.find(a => a.id === appId)
     if (!app) return
 
-    const newStatus = app.status === 'Archived' ? null : 'Archived'
-
-    if (!newStatus) {
-      // Permanently delete archived items
+    if (app.status === 'Archived') {
       if (!window.confirm('Permanently delete this application?')) return
-    }
-
-    const previousItems = { ...items }
-    const newItems = { ...items }
-
-    // Remove from old column
-    newItems[app.status] = newItems[app.status].filter(a => a.id !== appId)
-
-    // Add to new column if not deleting
-    if (newStatus) {
-      newItems[newStatus] = [...(newItems[newStatus] || []), { ...app, status: newStatus }]
-    }
-
-    setItems(newItems)
-    setLoading(true)
-    setError(null)
-
-    try {
-      if (newStatus) {
-        // Archive the item
-        await updateApplication(appId, { status: newStatus })
-        const updatedApps = applications.map(a =>
-          a.id === appId ? { ...a, status: newStatus } : a
-        )
-        onApplicationsChange(updatedApps)
-      } else {
-        // Permanently delete
+      setLoading(true)
+      try {
         await deleteApplication(appId)
-        const updatedApps = applications.filter(a => a.id !== appId)
-        onApplicationsChange(updatedApps)
+        onRefresh()
+      } catch (err) {
+        setError(`Failed to delete: ${err.message}`)
+      } finally {
+        setLoading(false)
       }
-    } catch (err) {
-      setItems(previousItems)
-      setError(`Failed to delete application: ${err.message}`)
-      console.error('Error deleting application:', err)
-    } finally {
-      setLoading(false)
+    } else {
+      setLoading(true)
+      try {
+        await updateApplication(appId, { status: 'Archived' })
+        onRefresh()
+      } catch (err) {
+        setError(`Failed to archive: ${err.message}`)
+      } finally {
+        setLoading(false)
+      }
     }
   }
 
-  // Update local state when applications change
   const handleDragEnd = async (event) => {
     const { active, over } = event
-
     setActiveId(null)
-
     if (!over) return
 
     const activeAppId = active.id
     const overColumnId = over.id
-
-    // Find the application being dragged
     const app = applications.find(a => a.id === activeAppId)
     if (!app) return
 
-    // If dropped on a column, update status
-    if (COLUMNS.some(col => col.id === overColumnId)) {
-      const newStatus = overColumnId
-      if (app.status === newStatus) return
-
-      // Optimistic update
-      const previousItems = { ...items }
-      const newItems = { ...items }
-
-      // Remove from old column
-      const oldColumn = app.status
-      newItems[oldColumn] = newItems[oldColumn].filter(a => a.id !== activeAppId)
-
-      // Add to new column
-      newItems[newStatus] = [...newItems[newStatus], { ...app, status: newStatus }]
-
-      setItems(newItems)
+    if (COLUMNS.some(col => col.id === overColumnId) && app.status !== overColumnId) {
       setLoading(true)
-      setError(null)
-
       try {
-        // Update backend
-        await updateApplication(activeAppId, { status: newStatus })
-
-        // Notify parent
-        const updatedApps = applications.map(a =>
-          a.id === activeAppId ? { ...a, status: newStatus } : a
-        )
-        onApplicationsChange(updatedApps)
+        await updateApplication(activeAppId, { status: overColumnId })
+        onRefresh()
       } catch (err) {
-        // Revert on error
-        setItems(previousItems)
-        setError(`Failed to update application: ${err.message}`)
-        console.error('Error updating application:', err)
+        setError(`Failed to update: ${err.message}`)
       } finally {
         setLoading(false)
       }
@@ -280,18 +173,13 @@ export function KanbanBoard({ applications, suggestions, onCardClick, onApplicat
   return (
     <div className="w-full">
       {error && (
-        <div className="mb-4 p-3 bg-destructive/10 border border-destructive text-destructive rounded text-sm">
+        <div className="mb-4 p-3 bg-red-900/30 border border-red-700 text-red-300 text-sm">
           {error}
         </div>
       )}
 
-      <DndContext
-        sensors={sensors}
-        collisionDetection={closestCorners}
-        onDragStart={handleDragStart}
-        onDragEnd={handleDragEnd}
-      >
-        <div className="grid grid-cols-5 gap-6 overflow-x-auto pb-4 w-full">
+      <DndContext sensors={sensors} collisionDetection={closestCorners} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
+        <div className="grid grid-cols-5 gap-6 pb-4 w-full">
           {COLUMNS.map(column => (
             <KanbanColumn
               key={column.id}
@@ -300,10 +188,7 @@ export function KanbanBoard({ applications, suggestions, onCardClick, onApplicat
               suggestions={suggestions}
               onCardClick={onCardClick}
               onDelete={handleDelete}
-              onPrepClick={(app) => {
-                setPrepModalApp(app)
-                setShowPrepModal(true)
-              }}
+              onPrepClick={(app) => { setPrepModalApp(app); setShowPrepModal(true) }}
             />
           ))}
         </div>
@@ -332,44 +217,34 @@ export function KanbanBoard({ applications, suggestions, onCardClick, onApplicat
         {showArchived && (
           <div className="mt-6 grid grid-cols-2 gap-6 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
             {(items['Archived'] || []).map(app => (
-              <div key={app.id} className="group">
-                <ApplicationCard
-                  application={app}
-                  hasSuggestion={suggestions.some(s => s.application_id === app.id)}
-                  onClick={() => onCardClick(app)}
-                  onDelete={handleDelete}
-                  isArchived={true}
-                  onPrepClick={(app) => {
-                    setPrepModalApp(app)
-                    setShowPrepModal(true)
-                  }}
-                />
-              </div>
+              <ApplicationCard
+                key={app.id}
+                application={app}
+                hasSuggestion={suggestions.some(s => s.application_id === app.id)}
+                onClick={() => onCardClick(app)}
+                onDelete={handleDelete}
+                isArchived={true}
+                onPrepClick={(app) => { setPrepModalApp(app); setShowPrepModal(true) }}
+              />
             ))}
           </div>
         )}
 
         {showArchived && (items['Archived']?.length === 0) && (
-          <div className="text-center text-slate-400 py-8">
-            No archived items
-          </div>
+          <div className="text-center text-slate-400 py-8">No archived items</div>
         )}
       </div>
 
-      {/* Interview Prep Modal */}
       <InterviewPrepModal
         application={prepModalApp}
         isOpen={showPrepModal}
-        onClose={() => {
-          setShowPrepModal(false)
-          setPrepModalApp(null)
-        }}
+        onClose={() => { setShowPrepModal(false); setPrepModalApp(null) }}
       />
 
       {loading && (
-        <div className="fixed inset-0 bg-black/20 flex items-center justify-center pointer-events-none">
-          <div className="bg-background p-4 rounded shadow-lg">
-            <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+        <div className="fixed inset-0 bg-black/20 flex items-center justify-center pointer-events-none z-50">
+          <div className="bg-slate-900 border border-slate-700 p-4">
+            <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
           </div>
         </div>
       )}

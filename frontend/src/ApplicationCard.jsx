@@ -1,78 +1,112 @@
-import { Card } from '@/components/ui/card'
-import { Badge } from '@/components/ui/badge'
 import { Trash2 } from 'lucide-react'
 
-export function ApplicationCard({ application, hasSuggestion, onClick, onDelete, isArchived, onPrepClick }) {
-  const hasPendingSuggestion = hasSuggestion === true
-  const hasRequiredFields = application.company_name && application.job_title && application.job_url
+function formatSalary(val) {
+  if (!val) return null
+  return '$' + Number(val).toLocaleString()
+}
 
+export function ApplicationCard({ application, hasSuggestion, onClick, onDelete, isArchived, onPrepClick, isDragging }) {
   const handleDelete = (e) => {
     e.stopPropagation()
-    if (onDelete) {
-      onDelete(application.id)
-    }
+    e.preventDefault()
+    if (onDelete) onDelete(application.id)
   }
 
   const handlePrepClick = (e) => {
     e.stopPropagation()
-    if (onPrepClick) {
-      onPrepClick(application)
-    }
+    e.preventDefault()
+    if (onPrepClick) onPrepClick(application)
   }
+
+  const isHourly = application.pay_type === 'Hourly'
+
+  const salaryDisplay = (() => {
+    if (!application.salary_min && !application.salary_max) return null
+    if (application.salary_min && application.salary_max) {
+      return `${formatSalary(application.salary_min)}–${formatSalary(application.salary_max)}`
+    }
+    return formatSalary(application.salary_min || application.salary_max)
+  })()
+
+  const targetDisplay = formatSalary(application.salary_negotiation_target)
 
   return (
     <div
       onClick={onClick}
-      className="p-6 bg-slate-800 border border-slate-700 hover:border-blue-500 cursor-pointer group relative transition-colors duration-200 h-full flex flex-col"
-      style={{ borderRadius: '0px', minHeight: '280px' }}
+      className="p-5 bg-slate-800 border border-slate-700 hover:border-blue-500 cursor-pointer relative transition-colors duration-200 flex flex-col"
+      style={{ borderRadius: '0px', minHeight: '220px' }}
     >
-      {/* Delete button - always visible */}
+      {/* Delete button */}
       {onDelete && (
         <button
           onClick={handleDelete}
-          className="absolute top-4 right-4 p-2 hover:text-red-400 text-slate-500 transition-colors"
+          className="absolute top-3 right-3 p-1.5 text-slate-500 hover:text-red-400 transition-colors z-10"
           title={isArchived ? 'Permanently delete' : 'Move to trash'}
         >
-          <Trash2 className="w-5 h-5" />
+          <Trash2 className="w-4 h-4" />
         </button>
       )}
 
-      <div className="space-y-4">
-        {/* Company Name */}
-        <h3 className="font-black text-lg leading-tight text-white truncate" style={{ letterSpacing: '0.5px' }}>
+      {/* Company — Role */}
+      <div className="pr-8 mb-3">
+        <h3 className="font-black text-base leading-tight text-white" style={{ letterSpacing: '0.5px' }}>
           {application.company_name}
         </h3>
-
-        {/* Job Title */}
-        <p className="text-sm text-slate-300 truncate font-medium">
+        <p className="text-sm text-slate-300 font-medium mt-0.5 leading-tight">
           {application.job_title}
         </p>
+      </div>
 
-        {/* Date Applied */}
-        <p className="text-xs text-slate-500 font-medium">
-          {new Date(application.date_submitted).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-        </p>
+      {/* Date Applied */}
+      <p className="text-xs text-slate-500 mb-3">
+        Applied {new Date(application.date_submitted).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+      </p>
 
-        {/* Pending Suggestion Badge */}
-        {hasPendingSuggestion && (
-          <div className="pt-2">
-            <Badge className="bg-blue-600 text-white border-0 font-bold uppercase text-xs" style={{ borderRadius: '4px', letterSpacing: '0.5px' }}>
-              ⚡ Suggestion
-            </Badge>
-          </div>
-        )}
+      {/* Compensation row */}
+      {(salaryDisplay || application.employment_type || application.pay_type) && (
+        <div className="mb-2 space-y-1">
+          {salaryDisplay && (
+            <p className="text-xs text-slate-300 font-medium">
+              💰 {salaryDisplay}
+              {application.pay_type && <span className="text-slate-500 ml-1">/ {isHourly ? 'hr' : 'yr'}</span>}
+            </p>
+          )}
+          {targetDisplay && (
+            <p className="text-xs text-blue-400 font-medium">
+              🎯 Target: {targetDisplay}{isHourly ? '/hr' : ''}
+            </p>
+          )}
+        </div>
+      )}
 
-        {/* Prep Button - only visible if required fields filled */}
-        {hasRequiredFields && !isArchived && (
-          <div className="pt-4 border-t border-slate-700 mt-4">
-            <button
-              onClick={handlePrepClick}
-              className="w-full px-3 py-2 bg-slate-700 hover:bg-slate-600 text-slate-100 font-bold uppercase text-xs transition-colors"
-              style={{ borderRadius: '0px', letterSpacing: '0.5px' }}
-            >
-              📚 Interview Prep
-            </button>
-          </div>
+      {/* Employment type badge */}
+      {application.employment_type && (
+        <div className="mb-3">
+          <span className="inline-block px-2 py-0.5 text-xs font-bold uppercase border border-slate-600 text-slate-400" style={{ letterSpacing: '0.5px' }}>
+            {application.employment_type}
+          </span>
+        </div>
+      )}
+
+      {/* Suggestion badge */}
+      {hasSuggestion && (
+        <div className="mb-2">
+          <span className="inline-block px-2 py-0.5 bg-blue-600 text-white text-xs font-bold uppercase" style={{ borderRadius: '4px' }}>
+            ⚡ Suggestion
+          </span>
+        </div>
+      )}
+
+      {/* Interview Prep button — spacer pushes it to bottom */}
+      <div className="mt-auto pt-3 border-t border-slate-700">
+        {!isArchived && (
+          <button
+            onClick={handlePrepClick}
+            className="w-full px-3 py-2 bg-slate-700 hover:bg-blue-600 text-slate-100 font-bold uppercase text-xs transition-colors"
+            style={{ borderRadius: '0px', letterSpacing: '0.5px' }}
+          >
+            📚 Interview Prep
+          </button>
         )}
       </div>
     </div>

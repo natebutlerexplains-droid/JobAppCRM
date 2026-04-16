@@ -40,10 +40,29 @@ class Database:
             date_submitted DATE NOT NULL,
             status TEXT NOT NULL DEFAULT 'Submitted'
                 CHECK(status IN ('Submitted', 'More Info Required', 'Interview Started', 'Denied', 'Offered', 'Archived')),
+            salary_min REAL,
+            salary_max REAL,
+            salary_negotiation_target REAL,
+            employment_type TEXT,
+            pay_type TEXT,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
         """)
+
+        # Migrate existing DBs — add new columns if missing
+        new_cols = [
+            ("salary_min", "REAL"),
+            ("salary_max", "REAL"),
+            ("salary_negotiation_target", "REAL"),
+            ("employment_type", "TEXT"),
+            ("pay_type", "TEXT"),
+        ]
+        for col_name, col_type in new_cols:
+            try:
+                cursor.execute(f"ALTER TABLE applications ADD COLUMN {col_name} {col_type}")
+            except Exception:
+                pass  # Column already exists
 
         # EMAILS table
         cursor.execute("""
@@ -113,12 +132,18 @@ class Database:
 class Application:
     @staticmethod
     def create(db: Database, company_name: str, job_title: str, date_submitted: str,
-               company_domain: Optional[str] = None, job_url: Optional[str] = None) -> int:
+               company_domain: Optional[str] = None, job_url: Optional[str] = None,
+               employment_type: Optional[str] = None, pay_type: Optional[str] = None,
+               salary_min: Optional[float] = None, salary_max: Optional[float] = None,
+               salary_negotiation_target: Optional[float] = None) -> int:
         """Create a new application."""
         cursor = db.execute(
-            """INSERT INTO applications (company_name, company_domain, job_title, job_url, date_submitted)
-               VALUES (?, ?, ?, ?, ?)""",
-            (company_name, company_domain, job_title, job_url, date_submitted)
+            """INSERT INTO applications
+               (company_name, company_domain, job_title, job_url, date_submitted,
+                employment_type, pay_type, salary_min, salary_max, salary_negotiation_target)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (company_name, company_domain, job_title, job_url, date_submitted,
+             employment_type, pay_type, salary_min, salary_max, salary_negotiation_target)
         )
         db.commit()
         return cursor.lastrowid
@@ -142,6 +167,25 @@ class Application:
         db.execute(
             "UPDATE applications SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
             (status, app_id)
+        )
+        db.commit()
+
+    @staticmethod
+    def update(db: Database, app_id: int, fields: dict):
+        """Update allowed fields on an application."""
+        allowed = {
+            'company_name', 'job_title', 'job_url', 'company_domain', 'status',
+            'salary_min', 'salary_max', 'salary_negotiation_target',
+            'employment_type', 'pay_type',
+        }
+        updates = {k: v for k, v in fields.items() if k in allowed}
+        if not updates:
+            return
+        set_clause = ", ".join(f"{k} = ?" for k in updates)
+        values = list(updates.values()) + [app_id]
+        db.execute(
+            f"UPDATE applications SET {set_clause}, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+            values
         )
         db.commit()
 

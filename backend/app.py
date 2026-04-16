@@ -56,6 +56,11 @@ def create_application():
             date_submitted=data["date_submitted"],
             company_domain=data.get("company_domain"),
             job_url=data.get("job_url"),
+            employment_type=data.get("employment_type"),
+            pay_type=data.get("pay_type"),
+            salary_min=data.get("salary_min"),
+            salary_max=data.get("salary_max"),
+            salary_negotiation_target=data.get("salary_negotiation_target"),
         )
 
         app = Application.get_by_id(db, app_id)
@@ -86,9 +91,7 @@ def update_application(app_id):
         if not data:
             return jsonify({"error": "No data provided"}), 400
 
-        # Update status if provided
-        if "status" in data:
-            Application.update_status(db, app_id, data["status"])
+        Application.update(db, app_id, data)
 
         app = Application.get_by_id(db, app_id)
         if not app:

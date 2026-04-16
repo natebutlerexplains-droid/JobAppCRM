@@ -3,31 +3,44 @@ import { getApplicationInteractions, createInteraction, updateApplication } from
 import { AddInteraction } from './AddInteraction'
 import { X } from 'lucide-react'
 
+const STATUSES = ['Submitted', 'More Info Required', 'Interview Started', 'Denied', 'Offered', 'Archived']
+
+function fmt(val) {
+  if (!val) return '—'
+  return '$' + Number(val).toLocaleString()
+}
+
 export function CardDetail({ application, isOpen, onClose, onSave }) {
   const [interactions, setInteractions] = useState([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
   const [showAddInteraction, setShowAddInteraction] = useState(false)
   const [isEditing, setIsEditing] = useState(false)
-  const [editData, setEditData] = useState(null)
+  const [editData, setEditData] = useState({})
   const [saving, setSaving] = useState(false)
 
+  // Load interactions whenever modal opens for a new app
   useEffect(() => {
     if (isOpen && application) {
-      loadData()
-      setEditData(application)
+      loadInteractions()
     }
   }, [isOpen, application?.id])
 
-  const loadData = async () => {
+  // Keep editData in sync with latest application data from parent
+  useEffect(() => {
+    if (application) {
+      setEditData({ ...application })
+    }
+  }, [application])
+
+  const loadInteractions = async () => {
     setLoading(true)
     setError(null)
     try {
-      const interactionsRes = await getApplicationInteractions(application.id)
-      setInteractions(interactionsRes.data || [])
+      const res = await getApplicationInteractions(application.id)
+      setInteractions(res.data || [])
     } catch (err) {
       setError(err.message)
-      console.error('Error loading card detail:', err)
     } finally {
       setLoading(false)
     }
@@ -36,7 +49,7 @@ export function CardDetail({ application, isOpen, onClose, onSave }) {
   const handleAddInteraction = async (data) => {
     try {
       await createInteraction(application.id, data)
-      await loadData()
+      await loadInteractions()
       setShowAddInteraction(false)
     } catch (err) {
       console.error('Error adding interaction:', err)
@@ -46,15 +59,13 @@ export function CardDetail({ application, isOpen, onClose, onSave }) {
 
   const handleSave = async () => {
     setSaving(true)
+    setError(null)
     try {
       await updateApplication(application.id, editData)
       setIsEditing(false)
-      if (onSave) {
-        onSave()
-      }
+      if (onSave) onSave()
     } catch (err) {
       setError(`Failed to save: ${err.message}`)
-      console.error('Error saving application:', err)
     } finally {
       setSaving(false)
     }
@@ -62,212 +73,186 @@ export function CardDetail({ application, isOpen, onClose, onSave }) {
 
   if (!isOpen || !application) return null
 
+  const isHourly = editData.pay_type === 'Hourly'
+
   return (
     <>
-      {/* Backdrop */}
-      <div
-        className="fixed inset-0 bg-black/60 z-40"
-        onClick={onClose}
-      />
+      <div className="fixed inset-0 bg-black/60 z-40" onClick={onClose} />
 
-      {/* Modal */}
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
         <div className="bg-slate-900 border border-slate-700 max-w-2xl w-full max-h-[90vh] overflow-y-auto" style={{ borderRadius: '0px' }}>
+
           {/* Header */}
-          <div className="sticky top-0 bg-slate-900 border-b border-slate-700 p-8 flex justify-between items-start">
+          <div className="sticky top-0 bg-slate-900 border-b border-slate-700 p-6 flex justify-between items-start">
             <div>
-              <h2 className="text-3xl font-black uppercase text-white" style={{ letterSpacing: '1px' }}>
-                {isEditing ? 'Edit Application' : 'Application Details'}
+              <h2 className="text-2xl font-black uppercase text-white" style={{ letterSpacing: '1px' }}>
+                {isEditing ? 'Edit Application' : application.company_name}
               </h2>
-              {!isEditing && <p className="text-slate-400 text-sm mt-2">{application.company_name} • {application.job_title}</p>}
+              {!isEditing && (
+                <p className="text-slate-400 text-sm mt-1">{application.job_title} • {application.status}</p>
+              )}
             </div>
-            <button
-              onClick={onClose}
-              className="p-2 text-slate-400 hover:text-white transition-colors"
-            >
+            <button onClick={onClose} className="p-2 text-slate-400 hover:text-white transition-colors">
               <X className="w-6 h-6" />
             </button>
           </div>
 
-          {/* Content */}
-          <div className="p-8 space-y-6">
+          <div className="p-6 space-y-6">
             {error && (
-              <div className="bg-red-900/30 border border-red-700 text-red-300 p-4 rounded">
-                {error}
-              </div>
+              <div className="bg-red-900/30 border border-red-700 text-red-300 p-3 text-sm">{error}</div>
             )}
 
             {isEditing ? (
-              // Edit Mode
-              <div className="space-y-6">
-                <div>
-                  <label className="block text-sm font-bold text-white mb-2 uppercase">Company Name</label>
-                  <input
-                    type="text"
-                    value={editData.company_name || ''}
-                    onChange={(e) => setEditData({...editData, company_name: e.target.value})}
-                    className="w-full px-4 py-2 bg-slate-800 border border-slate-700 text-white rounded"
-                    style={{ borderRadius: '0px' }}
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-bold text-white mb-2 uppercase">Job Title</label>
-                  <input
-                    type="text"
-                    value={editData.job_title || ''}
-                    onChange={(e) => setEditData({...editData, job_title: e.target.value})}
-                    className="w-full px-4 py-2 bg-slate-800 border border-slate-700 text-white rounded"
-                    style={{ borderRadius: '0px' }}
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-bold text-white mb-2 uppercase">Job URL</label>
-                  <input
-                    type="text"
-                    value={editData.job_url || ''}
-                    onChange={(e) => setEditData({...editData, job_url: e.target.value})}
-                    className="w-full px-4 py-2 bg-slate-800 border border-slate-700 text-white rounded"
-                    style={{ borderRadius: '0px' }}
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-bold text-white mb-2 uppercase">Status</label>
-                  <select
-                    value={editData.status || ''}
-                    onChange={(e) => setEditData({...editData, status: e.target.value})}
-                    className="w-full px-4 py-2 bg-slate-800 border border-slate-700 text-white rounded"
-                    style={{ borderRadius: '0px' }}
-                  >
-                    <option value="Submitted">Submitted</option>
-                    <option value="More Info Required">More Info Required</option>
-                    <option value="Interview Started">Interview Started</option>
-                    <option value="Denied">Denied</option>
-                    <option value="Offered">Offered</option>
-                    <option value="Archived">Archived</option>
-                  </select>
-                </div>
-
+              /* ── EDIT MODE ── */
+              <div className="space-y-4">
                 <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-bold text-white mb-2 uppercase">Salary Min</label>
-                    <input
-                      type="number"
-                      value={editData.salary_min || ''}
-                      onChange={(e) => setEditData({...editData, salary_min: e.target.value ? parseInt(e.target.value) : null})}
-                      className="w-full px-4 py-2 bg-slate-800 border border-slate-700 text-white rounded"
-                      style={{ borderRadius: '0px' }}
-                    />
+                  <div className="col-span-2">
+                    <label className="block text-xs font-bold text-slate-400 mb-1 uppercase">Company Name</label>
+                    <input type="text" value={editData.company_name || ''} onChange={e => setEditData({...editData, company_name: e.target.value})}
+                      className="w-full px-3 py-2 bg-slate-800 border border-slate-600 text-white text-sm" style={{ borderRadius: '0px' }} />
                   </div>
+
+                  <div className="col-span-2">
+                    <label className="block text-xs font-bold text-slate-400 mb-1 uppercase">Job Title</label>
+                    <input type="text" value={editData.job_title || ''} onChange={e => setEditData({...editData, job_title: e.target.value})}
+                      className="w-full px-3 py-2 bg-slate-800 border border-slate-600 text-white text-sm" style={{ borderRadius: '0px' }} />
+                  </div>
+
+                  <div className="col-span-2">
+                    <label className="block text-xs font-bold text-slate-400 mb-1 uppercase">Job URL</label>
+                    <input type="text" value={editData.job_url || ''} onChange={e => setEditData({...editData, job_url: e.target.value})}
+                      className="w-full px-3 py-2 bg-slate-800 border border-slate-600 text-white text-sm" style={{ borderRadius: '0px' }} />
+                  </div>
+
                   <div>
-                    <label className="block text-sm font-bold text-white mb-2 uppercase">Salary Max</label>
-                    <input
-                      type="number"
-                      value={editData.salary_max || ''}
-                      onChange={(e) => setEditData({...editData, salary_max: e.target.value ? parseInt(e.target.value) : null})}
-                      className="w-full px-4 py-2 bg-slate-800 border border-slate-700 text-white rounded"
-                      style={{ borderRadius: '0px' }}
-                    />
+                    <label className="block text-xs font-bold text-slate-400 mb-1 uppercase">Status</label>
+                    <select value={editData.status || ''} onChange={e => setEditData({...editData, status: e.target.value})}
+                      className="w-full px-3 py-2 bg-slate-800 border border-slate-600 text-white text-sm" style={{ borderRadius: '0px' }}>
+                      {STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-slate-400 mb-1 uppercase">Employment Type</label>
+                    <select value={editData.employment_type || ''} onChange={e => setEditData({...editData, employment_type: e.target.value || null})}
+                      className="w-full px-3 py-2 bg-slate-800 border border-slate-600 text-white text-sm" style={{ borderRadius: '0px' }}>
+                      <option value="">Not set</option>
+                      <option value="W2">W2</option>
+                      <option value="1099">1099</option>
+                      <option value="Contract">Contract</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-slate-400 mb-1 uppercase">Pay Type</label>
+                    <select value={editData.pay_type || ''} onChange={e => setEditData({...editData, pay_type: e.target.value || null})}
+                      className="w-full px-3 py-2 bg-slate-800 border border-slate-600 text-white text-sm" style={{ borderRadius: '0px' }}>
+                      <option value="">Not set</option>
+                      <option value="Salary">Salary</option>
+                      <option value="Hourly">Hourly</option>
+                    </select>
+                  </div>
+
+                  <div></div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-slate-400 mb-1 uppercase">{isHourly ? 'Min Hourly Rate' : 'Salary Min'}</label>
+                    <input type="number" value={editData.salary_min || ''} onChange={e => setEditData({...editData, salary_min: e.target.value ? parseFloat(e.target.value) : null})}
+                      placeholder={isHourly ? '25' : '80000'}
+                      className="w-full px-3 py-2 bg-slate-800 border border-slate-600 text-white text-sm" style={{ borderRadius: '0px' }} />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-slate-400 mb-1 uppercase">{isHourly ? 'Max Hourly Rate' : 'Salary Max'}</label>
+                    <input type="number" value={editData.salary_max || ''} onChange={e => setEditData({...editData, salary_max: e.target.value ? parseFloat(e.target.value) : null})}
+                      placeholder={isHourly ? '45' : '120000'}
+                      className="w-full px-3 py-2 bg-slate-800 border border-slate-600 text-white text-sm" style={{ borderRadius: '0px' }} />
+                  </div>
+
+                  <div className="col-span-2">
+                    <label className="block text-xs font-bold text-slate-400 mb-1 uppercase">{isHourly ? 'Target Hourly Rate' : 'Target Salary'}</label>
+                    <input type="number" value={editData.salary_negotiation_target || ''} onChange={e => setEditData({...editData, salary_negotiation_target: e.target.value ? parseFloat(e.target.value) : null})}
+                      placeholder={isHourly ? '40' : '110000'}
+                      className="w-full px-3 py-2 bg-slate-800 border border-slate-600 text-white text-sm" style={{ borderRadius: '0px' }} />
                   </div>
                 </div>
 
-                <div>
-                  <label className="block text-sm font-bold text-white mb-2 uppercase">Salary Target</label>
-                  <input
-                    type="number"
-                    value={editData.salary_negotiation_target || ''}
-                    onChange={(e) => setEditData({...editData, salary_negotiation_target: e.target.value ? parseInt(e.target.value) : null})}
-                    className="w-full px-4 py-2 bg-slate-800 border border-slate-700 text-white rounded"
-                    style={{ borderRadius: '0px' }}
-                  />
-                </div>
-
-                <div className="flex gap-4">
-                  <button
-                    onClick={handleSave}
-                    disabled={saving}
-                    className="flex-1 px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold uppercase transition-colors disabled:opacity-50"
-                    style={{ borderRadius: '0px' }}
-                  >
-                    {saving ? 'Saving...' : '✓ Save'}
+                <div className="flex gap-3 pt-2">
+                  <button onClick={handleSave} disabled={saving}
+                    className="flex-1 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold uppercase text-sm transition-colors disabled:opacity-50" style={{ borderRadius: '0px' }}>
+                    {saving ? 'Saving...' : '✓ Save Changes'}
                   </button>
-                  <button
-                    onClick={() => setIsEditing(false)}
-                    className="flex-1 px-6 py-3 bg-slate-700 hover:bg-slate-600 text-white font-bold uppercase transition-colors"
-                    style={{ borderRadius: '0px' }}
-                  >
+                  <button onClick={() => { setIsEditing(false); setEditData({ ...application }) }}
+                    className="flex-1 px-4 py-2.5 bg-slate-700 hover:bg-slate-600 text-white font-bold uppercase text-sm transition-colors" style={{ borderRadius: '0px' }}>
                     Cancel
                   </button>
                 </div>
               </div>
             ) : (
-              // View Mode
+              /* ── VIEW MODE ── */
               <div className="space-y-6">
-                <div className="bg-slate-800/50 border border-slate-700 p-6 space-y-3">
-                  <div className="flex justify-between">
-                    <span className="text-slate-400">Company:</span>
-                    <span className="text-white font-medium">{application.company_name}</span>
-                  </div>
-                  <div className="flex justify-between border-t border-slate-700 pt-3">
-                    <span className="text-slate-400">Position:</span>
-                    <span className="text-white font-medium">{application.job_title}</span>
-                  </div>
-                  <div className="flex justify-between border-t border-slate-700 pt-3">
-                    <span className="text-slate-400">Status:</span>
-                    <span className="text-white font-medium">{application.status}</span>
-                  </div>
-                  <div className="flex justify-between border-t border-slate-700 pt-3">
-                    <span className="text-slate-400">Applied:</span>
-                    <span className="text-white font-medium">{new Date(application.date_submitted).toLocaleDateString()}</span>
-                  </div>
+                {/* Info block */}
+                <div className="bg-slate-800/50 border border-slate-700 p-5 space-y-2.5 text-sm">
+                  <div className="flex justify-between"><span className="text-slate-400">Company</span><span className="text-white font-medium">{application.company_name}</span></div>
+                  <div className="flex justify-between border-t border-slate-700/50 pt-2.5"><span className="text-slate-400">Position</span><span className="text-white font-medium">{application.job_title}</span></div>
+                  <div className="flex justify-between border-t border-slate-700/50 pt-2.5"><span className="text-slate-400">Status</span><span className="text-white font-medium">{application.status}</span></div>
+                  <div className="flex justify-between border-t border-slate-700/50 pt-2.5"><span className="text-slate-400">Applied</span><span className="text-white font-medium">{new Date(application.date_submitted).toLocaleDateString()}</span></div>
+                  {application.employment_type && (
+                    <div className="flex justify-between border-t border-slate-700/50 pt-2.5"><span className="text-slate-400">Type</span><span className="text-white font-medium">{application.employment_type}</span></div>
+                  )}
+                  {application.pay_type && (
+                    <div className="flex justify-between border-t border-slate-700/50 pt-2.5"><span className="text-slate-400">Pay</span><span className="text-white font-medium">{application.pay_type}</span></div>
+                  )}
+                  {(application.salary_min || application.salary_max) && (
+                    <div className="flex justify-between border-t border-slate-700/50 pt-2.5">
+                      <span className="text-slate-400">Range</span>
+                      <span className="text-white font-medium">
+                        {application.salary_min && application.salary_max
+                          ? `${fmt(application.salary_min)} – ${fmt(application.salary_max)}`
+                          : fmt(application.salary_min || application.salary_max)}
+                        {application.pay_type === 'Hourly' ? '/hr' : ''}
+                      </span>
+                    </div>
+                  )}
+                  {application.salary_negotiation_target && (
+                    <div className="flex justify-between border-t border-slate-700/50 pt-2.5"><span className="text-slate-400">Target</span><span className="text-blue-400 font-medium">{fmt(application.salary_negotiation_target)}{application.pay_type === 'Hourly' ? '/hr' : ''}</span></div>
+                  )}
+                  {application.job_url && (
+                    <div className="flex justify-between border-t border-slate-700/50 pt-2.5">
+                      <span className="text-slate-400">Job URL</span>
+                      <a href={application.job_url} target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:text-blue-300 font-medium">View listing →</a>
+                    </div>
+                  )}
                 </div>
 
-                {(application.salary_min || application.salary_max) && (
-                  <div className="bg-slate-800/50 border border-slate-700 p-6 space-y-2">
-                    <p className="text-slate-300">Range: ${application.salary_min?.toLocaleString()} - ${application.salary_max?.toLocaleString()}</p>
-                    {application.salary_negotiation_target && (
-                      <p className="text-blue-400">Target: ${application.salary_negotiation_target?.toLocaleString()}</p>
-                    )}
-                  </div>
-                )}
-
-                <button
-                  onClick={() => setIsEditing(true)}
-                  className="w-full px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold uppercase transition-colors"
-                  style={{ borderRadius: '0px' }}
-                >
-                  ✎ Edit Application
-                </button>
-
-                <button
-                  onClick={() => setShowAddInteraction(true)}
-                  className="w-full px-6 py-3 bg-slate-700 hover:bg-slate-600 text-white font-bold uppercase transition-colors"
-                  style={{ borderRadius: '0px' }}
-                >
-                  + Add Interaction
-                </button>
+                {/* Action buttons */}
+                <div className="flex gap-3">
+                  <button onClick={() => setIsEditing(true)}
+                    className="flex-1 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold uppercase text-sm transition-colors" style={{ borderRadius: '0px' }}>
+                    ✎ Edit
+                  </button>
+                  <button onClick={() => setShowAddInteraction(true)}
+                    className="flex-1 px-4 py-2.5 bg-slate-700 hover:bg-slate-600 text-white font-bold uppercase text-sm transition-colors" style={{ borderRadius: '0px' }}>
+                    + Note
+                  </button>
+                </div>
 
                 {/* Interactions */}
                 <div>
-                  <h3 className="font-bold text-white uppercase text-sm mb-4" style={{ letterSpacing: '0.5px' }}>Interactions</h3>
-                  <div className="space-y-3">
-                    {interactions.length === 0 ? (
-                      <p className="text-slate-400 text-sm py-4 text-center">No interactions recorded yet</p>
+                  <h3 className="font-bold text-white uppercase text-xs mb-3 text-slate-400" style={{ letterSpacing: '0.5px' }}>Interaction Log</h3>
+                  {loading && <p className="text-slate-400 text-sm">Loading...</p>}
+                  <div className="space-y-2">
+                    {interactions.length === 0 && !loading ? (
+                      <p className="text-slate-500 text-sm py-3 text-center">No interactions recorded yet</p>
                     ) : (
-                      interactions.map(interaction => (
-                        <div key={interaction.id} className="bg-slate-800/30 border-l-4 border-blue-500 pl-4 py-3">
+                      interactions.map(i => (
+                        <div key={i.id} className="bg-slate-800/30 border-l-4 border-blue-500 pl-4 py-2.5">
                           <div className="flex justify-between items-start gap-2">
-                            <div className="flex-1">
-                              <p className="font-medium text-sm text-white capitalize">
-                                {interaction.type.replace('_', ' ')}
-                              </p>
-                              {interaction.content && (
-                                <p className="text-sm text-slate-300 mt-1">{interaction.content}</p>
-                              )}
+                            <div>
+                              <p className="font-medium text-sm text-white capitalize">{i.type.replace(/_/g, ' ')}</p>
+                              {i.content && <p className="text-sm text-slate-300 mt-0.5">{i.content}</p>}
                             </div>
-                            <p className="text-xs text-slate-500 whitespace-nowrap">{new Date(interaction.occurred_at).toLocaleDateString()}</p>
+                            <p className="text-xs text-slate-500 whitespace-nowrap">{new Date(i.occurred_at).toLocaleDateString()}</p>
                           </div>
                         </div>
                       ))
@@ -277,7 +262,6 @@ export function CardDetail({ application, isOpen, onClose, onSave }) {
               </div>
             )}
 
-            {/* Add Interaction Modal */}
             {showAddInteraction && (
               <AddInteraction
                 appId={application.id}
