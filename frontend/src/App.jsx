@@ -79,40 +79,45 @@ function App() {
   }
 
   return (
-    <div className="min-h-screen bg-background flex flex-col">
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-950 dark:to-slate-900 flex flex-col">
       {/* Header */}
-      <header className="border-b bg-card sticky top-0 z-30">
-        <div className="max-w-7xl mx-auto px-4 py-4">
-          <div className="flex justify-between items-center mb-4">
-            <h1 className="text-3xl font-bold text-foreground">Job Application CRM</h1>
+      <header className="border-b border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-slate-900/50 backdrop-blur-md sticky top-0 z-30 shadow-sm">
+        <div className="max-w-7xl mx-auto px-6 py-6">
+          <div className="flex justify-between items-center mb-6">
+            <div>
+              <h1 className="text-4xl font-bold bg-gradient-to-r from-slate-900 to-slate-600 dark:from-white dark:to-slate-400 bg-clip-text text-transparent">
+                Job CRM
+              </h1>
+              <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">Track your applications pipeline</p>
+            </div>
             {currentPage === 'dashboard' && (
               <button
                 onClick={() => setShowNewAppForm(true)}
-                className="px-4 py-2 bg-primary text-primary-foreground rounded hover:opacity-90 transition-opacity font-medium"
+                className="px-6 py-3 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white rounded-lg font-semibold shadow-lg hover:shadow-xl transition-all duration-200 hover:scale-105"
               >
-                + New Application
+                ✨ New Application
               </button>
             )}
           </div>
 
           {/* Navigation */}
-          <div className="flex gap-4 border-t pt-3">
+          <div className="flex gap-2 border-t border-slate-200 dark:border-slate-800 pt-4">
             <button
               onClick={() => setCurrentPage('dashboard')}
-              className={`px-3 py-2 rounded font-medium transition-colors ${
+              className={`px-4 py-2 rounded-lg font-medium transition-all duration-200 ${
                 currentPage === 'dashboard'
-                  ? 'bg-primary text-primary-foreground'
-                  : 'text-muted-foreground hover:text-foreground hover:bg-muted'
+                  ? 'bg-blue-600 text-white shadow-md'
+                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800'
               }`}
             >
               Dashboard
             </button>
             <button
               onClick={() => setCurrentPage('settings')}
-              className={`px-3 py-2 rounded font-medium transition-colors ${
+              className={`px-4 py-2 rounded-lg font-medium transition-all duration-200 ${
                 currentPage === 'settings'
-                  ? 'bg-primary text-primary-foreground'
-                  : 'text-muted-foreground hover:text-foreground hover:bg-muted'
+                  ? 'bg-blue-600 text-white shadow-md'
+                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800'
               }`}
             >
               Settings
@@ -122,33 +127,25 @@ function App() {
       </header>
 
       {/* Main Content */}
-      <main className="flex-1 flex flex-col bg-background">
-        <div className="flex-1 max-w-7xl mx-auto w-full px-4 py-8">
+      <main className="flex-1 flex flex-col">
+        <div className="flex-1 max-w-7xl mx-auto w-full px-6 py-8">
           {currentPage === 'settings' && <Settings />}
           {currentPage === 'dashboard' && (
             <>
               {/* Stats Bar */}
-              <div className="grid grid-cols-5 gap-4 mb-8">
-                <div className="bg-card border rounded p-4">
-                  <div className="text-sm text-muted-foreground">Submitted</div>
-                  <div className="text-2xl font-bold">{stats.Submitted || 0}</div>
-                </div>
-                <div className="bg-card border rounded p-4">
-                  <div className="text-sm text-muted-foreground">More Info</div>
-                  <div className="text-2xl font-bold">{stats['More Info Required'] || 0}</div>
-                </div>
-                <div className="bg-card border rounded p-4">
-                  <div className="text-sm text-muted-foreground">Interview</div>
-                  <div className="text-2xl font-bold">{stats['Interview Started'] || 0}</div>
-                </div>
-                <div className="bg-card border rounded p-4">
-                  <div className="text-sm text-muted-foreground">Denied</div>
-                  <div className="text-2xl font-bold">{stats.Denied || 0}</div>
-                </div>
-                <div className="bg-card border rounded p-4">
-                  <div className="text-sm text-muted-foreground">Offered</div>
-                  <div className="text-2xl font-bold">{stats.Offered || 0}</div>
-                </div>
+              <div className="grid grid-cols-5 gap-4 mb-10">
+                {[
+                  { label: 'Submitted', value: stats.Submitted || 0, color: 'from-blue-500 to-blue-600' },
+                  { label: 'More Info', value: stats['More Info Required'] || 0, color: 'from-amber-500 to-amber-600' },
+                  { label: 'Interview', value: stats['Interview Started'] || 0, color: 'from-purple-500 to-purple-600' },
+                  { label: 'Denied', value: stats.Denied || 0, color: 'from-red-500 to-red-600' },
+                  { label: 'Offered', value: stats.Offered || 0, color: 'from-emerald-500 to-emerald-600' },
+                ].map((stat, idx) => (
+                  <div key={idx} className={`bg-gradient-to-br ${stat.color} rounded-xl p-6 text-white shadow-lg hover:shadow-xl transition-shadow duration-200`}>
+                    <div className="text-sm font-medium opacity-90">{stat.label}</div>
+                    <div className="text-4xl font-bold mt-3">{stat.value}</div>
+                  </div>
+                ))}
               </div>
 
               {/* Kanban Board */}
