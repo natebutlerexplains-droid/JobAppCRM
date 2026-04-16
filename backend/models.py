@@ -24,6 +24,7 @@ class Database:
         self.connection.execute("PRAGMA journal_mode=WAL")
         self.connection.execute("PRAGMA synchronous=NORMAL")
         self.create_tables()
+        self._migrate_sync_logs_status()
 
     def create_tables(self):
         """Create all database tables."""
@@ -39,44 +40,26 @@ class Database:
             job_url TEXT,
             date_submitted DATE NOT NULL,
             status TEXT NOT NULL DEFAULT 'Submitted'
-                CHECK(status IN ('Submitted', 'More Info Required', 'Interview Started', 'Denied', 'Offered', 'Archived')),
-            salary_min REAL,
-            salary_max REAL,
-            salary_negotiation_target REAL,
-            employment_type TEXT,
-            pay_type TEXT,
+                CHECK(status IN ('Submitted', 'More Info Required', 'Interview Started', 'Denied', 'Offered')),
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
         """)
-
-        # Migrate existing DBs — add new columns if missing
-        new_cols = [
-            ("salary_min", "REAL"),
-            ("salary_max", "REAL"),
-            ("salary_negotiation_target", "REAL"),
-            ("employment_type", "TEXT"),
-            ("pay_type", "TEXT"),
-            ("work_arrangement", "TEXT"),
-            ("work_arrangement_notes", "TEXT"),
-            ("company_website", "TEXT"),
-            ("notes", "TEXT"),
-        ]
-        for col_name, col_type in new_cols:
-            try:
-                cursor.execute(f"ALTER TABLE applications ADD COLUMN {col_name} {col_type}")
-            except Exception:
-                pass  # Column already exists
 
         # EMAILS table
         cursor.execute("""
         CREATE TABLE IF NOT EXISTS emails (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             application_id INTEGER,
+            ms_message_id TEXT UNIQUE NOT NULL,
             sender TEXT NOT NULL,
             subject TEXT NOT NULL,
             body_excerpt TEXT,
             date_received TIMESTAMP NOT NULL,
+            email_type TEXT DEFAULT 'other'
+                CHECK(email_type IN ('application_confirmation', 'interview_request', 'rejection', 'more_info_needed', 'other', 'unclassified')),
+            gemini_classification TEXT,
+            linked_confidence REAL,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (application_id) REFERENCES applications(id) ON DELETE CASCADE
         )
@@ -114,6 +97,151 @@ class Database:
         )
         """)
 
+        # PROCESSED_EMAILS table (dedup tracking)
+        cursor.execute("""
+        CREATE TABLE IF NOT EXISTS processed_emails (
+            ms_message_id TEXT PRIMARY KEY
+        )
+        """)
+
+        # SYNC_LOGS table
+        cursor.execute("""
+        CREATE TABLE IF NOT EXISTS sync_logs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            started_at TIMESTAMP NOT NULL,
+            finished_at TIMESTAMP,
+            emails_fetched INTEGER DEFAULT 0,
+            emails_processed INTEGER DEFAULT 0,
+            apps_created INTEGER DEFAULT 0,
+            errors TEXT,
+            status TEXT DEFAULT 'running'
+                CHECK(status IN ('running', 'completed', 'failed', 'cancelled')),
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+        """)
+
+        # CONFIG table (key-value store for app settings)
+        cursor.execute("""
+        CREATE TABLE IF NOT EXISTS config (
+            key TEXT PRIMARY KEY,
+            value TEXT NOT NULL,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+        """)
+
+        # CLASSIFICATION_FEEDBACK table (user corrections for Gemini training)
+        cursor.execute("""
+        CREATE TABLE IF NOT EXISTS classification_feedback (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            email_id INTEGER NOT NULL,
+            original_category TEXT NOT NULL,
+            corrected_category TEXT NOT NULL,
+            reason_code TEXT NOT NULL,
+            reason_label TEXT NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (email_id) REFERENCES emails(id) ON DELETE CASCADE
+        )
+        """)
+
+        # INTERVIEW_PREP table (user interview preparation data)
+        cursor.execute("""
+        CREATE TABLE IF NOT EXISTS interview_prep (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            application_id INTEGER NOT NULL,
+            company_research TEXT,
+            interview_questions TEXT,
+            questions_to_ask TEXT,
+            quiz_results TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (application_id) REFERENCES applications(id) ON DELETE CASCADE
+        )
+        """)
+
+        # Safe migrations — add new columns if they don't exist
+        try:
+            cursor.execute("ALTER TABLE emails ADD COLUMN trashed INTEGER DEFAULT 0")
+        except Exception:
+            pass  # Column already exists
+
+        try:
+            cursor.execute("ALTER TABLE applications ADD COLUMN notes TEXT")
+        except Exception:
+            pass
+
+        try:
+            cursor.execute("ALTER TABLE applications ADD COLUMN salary_min INTEGER")
+        except Exception:
+            pass
+
+        try:
+            cursor.execute("ALTER TABLE applications ADD COLUMN salary_max INTEGER")
+        except Exception:
+            pass
+
+        try:
+            cursor.execute("ALTER TABLE applications ADD COLUMN salary_negotiation_target INTEGER")
+        except Exception:
+            pass
+
+        try:
+            cursor.execute("ALTER TABLE interview_prep ADD COLUMN web_crawled BOOLEAN DEFAULT 0")
+        except Exception:
+            pass
+
+        try:
+            cursor.execute("ALTER TABLE interview_prep ADD COLUMN data_source TEXT DEFAULT 'gemini_knowledge'")
+        except Exception:
+            pass
+
+        self.connection.commit()
+
+    def _sync_logs_allows_cancelled(self) -> bool:
+        cursor = self.connection.execute(
+            "SELECT sql FROM sqlite_master WHERE type='table' AND name='sync_logs'"
+        )
+        row = cursor.fetchone()
+        if not row or not row["sql"]:
+            return True
+        return "cancelled" in row["sql"]
+
+    def _migrate_sync_logs_status(self):
+        if self._sync_logs_allows_cancelled():
+            return
+        try:
+            self.connection.execute("BEGIN")
+            self.connection.execute("""
+            CREATE TABLE sync_logs_new (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                started_at TIMESTAMP NOT NULL,
+                finished_at TIMESTAMP,
+                emails_fetched INTEGER DEFAULT 0,
+                emails_processed INTEGER DEFAULT 0,
+                apps_created INTEGER DEFAULT 0,
+                errors TEXT,
+                status TEXT DEFAULT 'running'
+                    CHECK(status IN ('running', 'completed', 'failed', 'cancelled')),
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+            """)
+            self.connection.execute("""
+            INSERT INTO sync_logs_new (
+                id, started_at, finished_at, emails_fetched, emails_processed,
+                apps_created, errors, status, created_at
+            )
+            SELECT
+                id, started_at, finished_at, emails_fetched, emails_processed,
+                apps_created, errors, status, created_at
+            FROM sync_logs
+            """)
+            self.connection.execute("DROP TABLE sync_logs")
+            self.connection.execute("ALTER TABLE sync_logs_new RENAME TO sync_logs")
+            self.connection.execute("COMMIT")
+        except Exception:
+            self.connection.execute("ROLLBACK")
+            raise
+
+        self.connection.commit()
 
     def execute(self, query: str, params: tuple = ()):
         """Execute a query and return the cursor."""
@@ -136,22 +264,12 @@ class Database:
 class Application:
     @staticmethod
     def create(db: Database, company_name: str, job_title: str, date_submitted: str,
-               company_domain: Optional[str] = None, job_url: Optional[str] = None,
-               employment_type: Optional[str] = None, pay_type: Optional[str] = None,
-               salary_min: Optional[float] = None, salary_max: Optional[float] = None,
-               salary_negotiation_target: Optional[float] = None,
-               work_arrangement: Optional[str] = None, work_arrangement_notes: Optional[str] = None,
-               company_website: Optional[str] = None, notes: Optional[str] = None) -> int:
+               company_domain: Optional[str] = None, job_url: Optional[str] = None) -> int:
         """Create a new application."""
         cursor = db.execute(
-            """INSERT INTO applications
-               (company_name, company_domain, job_title, job_url, date_submitted,
-                employment_type, pay_type, salary_min, salary_max, salary_negotiation_target,
-                work_arrangement, work_arrangement_notes, company_website, notes)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-            (company_name, company_domain, job_title, job_url, date_submitted,
-             employment_type, pay_type, salary_min, salary_max, salary_negotiation_target,
-             work_arrangement, work_arrangement_notes, company_website, notes)
+            """INSERT INTO applications (company_name, company_domain, job_title, job_url, date_submitted)
+               VALUES (?, ?, ?, ?, ?)""",
+            (company_name, company_domain, job_title, job_url, date_submitted)
         )
         db.commit()
         return cursor.lastrowid
@@ -179,22 +297,23 @@ class Application:
         db.commit()
 
     @staticmethod
-    def update(db: Database, app_id: int, fields: dict):
-        """Update allowed fields on an application."""
-        allowed = {
-            'company_name', 'job_title', 'job_url', 'company_domain', 'status',
-            'salary_min', 'salary_max', 'salary_negotiation_target',
-            'employment_type', 'pay_type', 'work_arrangement', 'work_arrangement_notes',
-            'company_website', 'notes',
-        }
-        updates = {k: v for k, v in fields.items() if k in allowed}
+    def update(db: Database, app_id: int, fields: Dict[str, Any]):
+        """Update application with whitelisted fields."""
+        ALLOWED = {'company_name', 'job_title', 'job_url', 'notes', 'salary_min', 'salary_max', 'salary_negotiation_target', 'status', 'company_domain'}
+
+        # Filter to allowed fields only
+        updates = {k: v for k, v in fields.items() if k in ALLOWED}
         if not updates:
             return
-        set_clause = ", ".join(f"{k} = ?" for k in updates)
-        values = list(updates.values()) + [app_id]
+
+        # Build dynamic SET clause
+        set_clause = ', '.join([f"{k} = ?" for k in updates.keys()])
+        values = list(updates.values())
+        values.append(app_id)
+
         db.execute(
             f"UPDATE applications SET {set_clause}, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
-            values
+            tuple(values)
         )
         db.commit()
 
@@ -220,14 +339,18 @@ class Application:
 
 class Email:
     @staticmethod
-    def create(db: Database, sender: str, subject: str,
+    def create(db: Database, ms_message_id: str, sender: str, subject: str,
                body_excerpt: Optional[str] = None, date_received: Optional[str] = None,
-               application_id: Optional[int] = None) -> int:
+               email_type: str = "other", gemini_classification: Optional[Dict] = None,
+               application_id: Optional[int] = None, linked_confidence: Optional[float] = None) -> int:
         """Create a new email record."""
+        classification_json = json.dumps(gemini_classification) if gemini_classification else None
         cursor = db.execute(
-            """INSERT INTO emails (sender, subject, body_excerpt, date_received, application_id)
-               VALUES (?, ?, ?, ?, ?)""",
-            (sender, subject, body_excerpt, date_received or datetime.now().isoformat(), application_id)
+            """INSERT INTO emails (ms_message_id, sender, subject, body_excerpt, date_received, email_type,
+                                   gemini_classification, application_id, linked_confidence)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (ms_message_id, sender, subject, body_excerpt, date_received or datetime.now().isoformat(),
+             email_type, classification_json, application_id, linked_confidence)
         )
         db.commit()
         return cursor.lastrowid
@@ -238,6 +361,14 @@ class Email:
         cursor = db.execute("SELECT * FROM emails WHERE id = ?", (email_id,))
         row = cursor.fetchone()
         return dict(row) if row else None
+
+    @staticmethod
+    def get_unlinked(db: Database) -> List[Dict[str, Any]]:
+        """Get all unlinked emails (application_id IS NULL, excluding classified leads/unrelated)."""
+        cursor = db.execute(
+            "SELECT * FROM emails WHERE application_id IS NULL AND (gemini_classification IS NULL OR (gemini_classification NOT LIKE '%job_lead%' AND gemini_classification NOT LIKE '%unrelated%')) ORDER BY date_received DESC"
+        )
+        return [dict(row) for row in cursor.fetchall()]
 
     @staticmethod
     def get_by_application(db: Database, app_id: int) -> List[Dict[str, Any]]:
@@ -254,6 +385,33 @@ class Email:
         db.execute(
             "UPDATE emails SET application_id = ? WHERE id = ?",
             (app_id, email_id)
+        )
+        db.commit()
+
+    @staticmethod
+    def mark_as_processed(db: Database, ms_message_id: str):
+        """Mark an email as processed."""
+        db.execute(
+            "INSERT OR IGNORE INTO processed_emails (ms_message_id) VALUES (?)",
+            (ms_message_id,)
+        )
+        db.commit()
+
+    @staticmethod
+    def is_processed(db: Database, ms_message_id: str) -> bool:
+        """Check if an email has been processed."""
+        cursor = db.execute(
+            "SELECT 1 FROM processed_emails WHERE ms_message_id = ?",
+            (ms_message_id,)
+        )
+        return cursor.fetchone() is not None
+
+    @staticmethod
+    def soft_delete(db: Database, email_id: int):
+        """Soft-delete an email (mark as trashed)."""
+        db.execute(
+            "UPDATE emails SET trashed = 1 WHERE id = ?",
+            (email_id,)
         )
         db.commit()
 
@@ -326,3 +484,326 @@ class StageSuggestion:
             (suggestion_id,)
         )
         db.commit()
+
+
+class SyncLog:
+    @staticmethod
+    def create(db: Database) -> int:
+        """Create a new sync log entry."""
+        cursor = db.execute(
+            "INSERT INTO sync_logs (started_at, status) VALUES (?, 'running')",
+            (datetime.now().isoformat(),)
+        )
+        db.commit()
+        return cursor.lastrowid
+
+    @staticmethod
+    def update(db: Database, log_id: int, emails_fetched: int = 0, emails_processed: int = 0,
+               apps_created: int = 0, status: str = "completed", errors: Optional[List[str]] = None):
+        """Update a sync log entry."""
+        errors_json = json.dumps(errors) if errors else None
+        db.execute(
+            """UPDATE sync_logs SET finished_at = ?, emails_fetched = ?, emails_processed = ?,
+                                    apps_created = ?, status = ?, errors = ?
+               WHERE id = ?""",
+            (datetime.now().isoformat(), emails_fetched, emails_processed, apps_created, status, errors_json, log_id)
+        )
+        db.commit()
+
+    @staticmethod
+    def update_progress(db: Database, log_id: int, emails_fetched: Optional[int] = None,
+                        emails_processed: Optional[int] = None, apps_created: Optional[int] = None,
+                        status: str = "running"):
+        """Update progress for a running sync without setting finished_at."""
+        db.execute(
+            """UPDATE sync_logs
+               SET emails_fetched = COALESCE(?, emails_fetched),
+                   emails_processed = COALESCE(?, emails_processed),
+                   apps_created = COALESCE(?, apps_created),
+                   status = ?
+               WHERE id = ?""",
+            (emails_fetched, emails_processed, apps_created, status, log_id)
+        )
+        db.commit()
+
+    @staticmethod
+    def get_latest(db: Database) -> Optional[Dict[str, Any]]:
+        """Get the latest sync log entry."""
+        cursor = db.execute(
+            "SELECT * FROM sync_logs ORDER BY created_at DESC LIMIT 1"
+        )
+        row = cursor.fetchone()
+        return dict(row) if row else None
+
+    @staticmethod
+    def get_running(db: Database) -> Optional[Dict[str, Any]]:
+        """Get the most recent running sync log entry."""
+        cursor = db.execute(
+            "SELECT * FROM sync_logs WHERE status = 'running' ORDER BY created_at DESC LIMIT 1"
+        )
+        row = cursor.fetchone()
+        return dict(row) if row else None
+
+    @staticmethod
+    def get_recent(db: Database, limit: int = 10) -> List[Dict[str, Any]]:
+        """Get recent sync logs."""
+        cursor = db.execute(
+            "SELECT * FROM sync_logs ORDER BY created_at DESC LIMIT ?",
+            (limit,)
+        )
+        return [dict(row) for row in cursor.fetchall()]
+
+
+class AppConfig:
+    """Application configuration (key-value store)."""
+
+    # Default sync schedule: daily at 2 AM
+    DEFAULT_SCHEDULE = "daily"  # "daily", "every_4_hours", "manual_only"
+    SCHEDULE_OPTIONS = ["daily", "every_4_hours", "manual_only"]
+
+    @staticmethod
+    def get(db: Database, key: str, default: str = None) -> str:
+        """Get a config value."""
+        cursor = db.execute(
+            "SELECT value FROM config WHERE key = ?",
+            (key,)
+        )
+        row = cursor.fetchone()
+        return row["value"] if row else default
+
+    @staticmethod
+    def set(db: Database, key: str, value: str):
+        """Set a config value."""
+        cursor = db.execute(
+            "SELECT value FROM config WHERE key = ?",
+            (key,)
+        )
+        if cursor.fetchone():
+            db.execute(
+                "UPDATE config SET value = ?, updated_at = CURRENT_TIMESTAMP WHERE key = ?",
+                (value, key)
+            )
+        else:
+            db.execute(
+                "INSERT INTO config (key, value) VALUES (?, ?)",
+                (key, value)
+            )
+        db.commit()
+
+    @staticmethod
+    def get_sync_schedule(db: Database) -> str:
+        """Get the configured sync schedule."""
+        return AppConfig.get(db, "sync_schedule", AppConfig.DEFAULT_SCHEDULE)
+
+    @staticmethod
+    def set_sync_schedule(db: Database, schedule: str):
+        """Set the sync schedule."""
+        if schedule not in AppConfig.SCHEDULE_OPTIONS:
+            raise ValueError(f"Invalid schedule: {schedule}")
+        AppConfig.set(db, "sync_schedule", schedule)
+
+    @staticmethod
+    def get_next_sync_time(db: Database) -> Optional[str]:
+        """Get the next scheduled sync time (stored by scheduler)."""
+        return AppConfig.get(db, "next_sync_time")
+
+    @staticmethod
+    def set_next_sync_time(db: Database, iso_time: str):
+        """Update the next scheduled sync time."""
+        AppConfig.set(db, "next_sync_time", iso_time)
+
+
+class ClassificationFeedback:
+    """User-submitted corrections to email classifications (training data for Gemini)."""
+
+    @staticmethod
+    def create(db: Database, email_id: int, original_category: str,
+               corrected_category: str, reason_code: str, reason_label: str) -> int:
+        """Store a user correction for a misclassified email."""
+        cursor = db.execute(
+            """INSERT INTO classification_feedback
+               (email_id, original_category, corrected_category, reason_code, reason_label)
+               VALUES (?, ?, ?, ?, ?)""",
+            (email_id, original_category, corrected_category, reason_code, reason_label)
+        )
+        db.commit()
+        return cursor.lastrowid
+
+    @staticmethod
+    def get_recent(db: Database, limit: int = 20) -> List[Dict[str, Any]]:
+        """Get recent feedback entries joined with email data for few-shot injection into Gemini."""
+        cursor = db.execute(
+            """SELECT cf.*, e.subject, e.sender, e.body_excerpt
+               FROM classification_feedback cf
+               JOIN emails e ON cf.email_id = e.id
+               ORDER BY cf.created_at DESC
+               LIMIT ?""",
+            (limit,)
+        )
+        return [dict(row) for row in cursor.fetchall()]
+
+    @staticmethod
+    def get_stats(db: Database) -> Dict[str, Any]:
+        """Return accuracy and training data metrics for the classifier gauge.
+
+        Uses a 30-day window for accuracy so the gauge fluctuates meaningfully
+        (not all-time count which barely moves with 2000+ emails).
+        Training examples count is all-time total.
+        """
+        # 30-day window for accuracy (recent classifications only)
+        recent_classified = db.execute(
+            """SELECT COUNT(*) as cnt FROM emails
+               WHERE gemini_classification IS NOT NULL
+               AND date_received >= datetime('now', '-30 days')"""
+        ).fetchone()["cnt"]
+
+        recent_corrected = db.execute(
+            """SELECT COUNT(*) as cnt FROM classification_feedback
+               WHERE created_at >= datetime('now', '-30 days')"""
+        ).fetchone()["cnt"]
+
+        # All-time training examples count
+        total_training_examples = db.execute(
+            "SELECT COUNT(*) as cnt FROM classification_feedback"
+        ).fetchone()["cnt"]
+
+        # Count corrections by target category (all-time)
+        by_target_rows = db.execute(
+            """SELECT corrected_category, COUNT(*) as cnt
+               FROM classification_feedback
+               GROUP BY corrected_category"""
+        ).fetchall()
+        by_target = {row["corrected_category"]: row["cnt"] for row in by_target_rows}
+
+        # Calculate accuracy using 30-day window so gauge fluctuates meaningfully
+        if recent_classified > 0:
+            accuracy_score = round(
+                ((recent_classified - recent_corrected) / recent_classified) * 100,
+                1
+            )
+        else:
+            accuracy_score = 100.0
+
+        return {
+            "total_classified": recent_classified,  # 30-day window
+            "total_corrected": recent_corrected,  # 30-day window
+            "training_examples": total_training_examples,  # all-time
+            "accuracy_score": accuracy_score,
+            "by_target": by_target,
+        }
+
+    @staticmethod
+    def get_for_email(db: Database, email_id: int) -> Optional[Dict[str, Any]]:
+        """Check if feedback already exists for this email (most recent)."""
+        cursor = db.execute(
+            "SELECT * FROM classification_feedback WHERE email_id = ? ORDER BY created_at DESC LIMIT 1",
+            (email_id,)
+        )
+        row = cursor.fetchone()
+        return dict(row) if row else None
+
+
+class InterviewPrep:
+    """Interview preparation data for applications (research, questions, quiz results)."""
+
+    @staticmethod
+    def get_or_create(db: Database, app_id: int) -> Dict[str, Any]:
+        """Fetch existing interview prep or create new row for application."""
+        cursor = db.execute(
+            "SELECT * FROM interview_prep WHERE application_id = ?",
+            (app_id,)
+        )
+        row = cursor.fetchone()
+        if row:
+            return dict(row)
+
+        # Create new prep row
+        cursor = db.execute(
+            """INSERT INTO interview_prep (application_id)
+               VALUES (?)""",
+            (app_id,)
+        )
+        db.commit()
+        prep_id = cursor.lastrowid
+
+        # Return the newly created row
+        return InterviewPrep.get_by_id(db, prep_id)
+
+    @staticmethod
+    def get_by_id(db: Database, prep_id: int) -> Optional[Dict[str, Any]]:
+        """Fetch interview prep by ID."""
+        cursor = db.execute(
+            "SELECT * FROM interview_prep WHERE id = ?",
+            (prep_id,)
+        )
+        row = cursor.fetchone()
+        return dict(row) if row else None
+
+    @staticmethod
+    def get_by_application(db: Database, app_id: int) -> Optional[Dict[str, Any]]:
+        """Fetch interview prep for an application."""
+        cursor = db.execute(
+            "SELECT * FROM interview_prep WHERE application_id = ?",
+            (app_id,)
+        )
+        row = cursor.fetchone()
+        return dict(row) if row else None
+
+    @staticmethod
+    def update(db: Database, prep_id: int, fields: Dict[str, Any]) -> bool:
+        """Update interview prep fields (company_research, interview_questions, etc)."""
+        if not fields:
+            return False
+
+        # Build dynamic UPDATE statement
+        set_clauses = []
+        values = []
+        for key, value in fields.items():
+            if key not in ["id", "application_id", "created_at"]:
+                set_clauses.append(f"{key} = ?")
+                # Convert dicts/lists to JSON strings
+                if isinstance(value, (dict, list)):
+                    values.append(json.dumps(value))
+                else:
+                    values.append(value)
+
+        if not set_clauses:
+            return False
+
+        set_clauses.append("updated_at = CURRENT_TIMESTAMP")
+        values.append(prep_id)
+
+        sql = f"UPDATE interview_prep SET {', '.join(set_clauses)} WHERE id = ?"
+        db.execute(sql, values)
+        db.commit()
+        return True
+
+    @staticmethod
+    def get_all_with_applications(db: Database) -> List[Dict[str, Any]]:
+        """Get all interview prep sessions joined with application info."""
+        cursor = db.execute(
+            """SELECT ip.*, a.company_name, a.job_title
+               FROM interview_prep ip
+               JOIN applications a ON ip.application_id = a.id
+               ORDER BY ip.created_at DESC"""
+        )
+        rows = cursor.fetchall()
+        result = []
+        for row in rows:
+            row_dict = dict(row)
+            # Count quiz results if present
+            quiz_results = []
+            if row_dict.get("quiz_results"):
+                try:
+                    quiz_results = json.loads(row_dict["quiz_results"])
+                except (json.JSONDecodeError, TypeError):
+                    pass
+            row_dict["quiz_count"] = len(quiz_results)
+            # Parse quiz results for average score
+            if quiz_results:
+                scores = [q.get("score", 0) for q in quiz_results if isinstance(q, dict)]
+                row_dict["quiz_average"] = round(sum(scores) / len(scores), 1) if scores else None
+            else:
+                row_dict["quiz_average"] = None
+            result.append(row_dict)
+        return result
