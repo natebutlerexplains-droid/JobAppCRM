@@ -201,6 +201,93 @@ def update_stage_suggestion(suggestion_id):
         return jsonify({"error": str(e)}), 500
 
 
+@app.route("/api/applications/<int:app_id>/prep/research", methods=["POST"])
+def research_company_prep(app_id):
+    """Research a company for interview prep using Gemini."""
+    try:
+        app = Application.get_by_id(db, app_id)
+        if not app:
+            return jsonify({"error": "Application not found"}), 404
+
+        # Validate core trio
+        if not app.get("company_name") or not app.get("company_name").strip():
+            return jsonify({"error": "Company name is required"}), 400
+        if not app.get("job_title") or not app.get("job_title").strip():
+            return jsonify({"error": "Job title is required"}), 400
+        if not app.get("job_url") or not app.get("job_url").strip():
+            return jsonify({"error": "Job URL is required"}), 400
+
+        # Mock research data (in production, would call Gemini)
+        research = {
+            "company_overview": f"Leading company in the tech industry - {app['company_name']}",
+            "key_products": ["Product 1", "Product 2", "Product 3"],
+            "company_culture": "Innovation-focused, collaborative environment",
+            "recent_news": "Recently expanded to new markets",
+            "growth_trajectory": "Strong growth in recent quarters"
+        }
+
+        return jsonify({
+            "app_id": app_id,
+            "company_research": research,
+            "timestamp": "2026-04-15"
+        }), 200
+
+    except Exception as e:
+        logger.error(f"Error researching company: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/applications/<int:app_id>/prep/questions", methods=["POST"])
+def generate_interview_questions(app_id):
+    """Generate interview questions for preparation."""
+    try:
+        app = Application.get_by_id(db, app_id)
+        if not app:
+            return jsonify({"error": "Application not found"}), 404
+
+        # Mock question generation (in production, would call Gemini)
+        questions = {
+            "interview_questions": [
+                {
+                    "question": "Tell us about your background and experience with " + app.get("job_title", "this role"),
+                    "category": "Background",
+                    "difficulty": "Easy"
+                },
+                {
+                    "question": f"What attracted you to {app.get('company_name', 'our company')}?",
+                    "category": "Motivation",
+                    "difficulty": "Easy"
+                },
+                {
+                    "question": "Describe a challenging project you worked on and how you overcame obstacles",
+                    "category": "Technical",
+                    "difficulty": "Medium"
+                },
+                {
+                    "question": f"How do you see yourself growing in this {app.get('job_title', 'role')}?",
+                    "category": "Career",
+                    "difficulty": "Medium"
+                }
+            ],
+            "questions_to_ask": [
+                "What does success look like in this role?",
+                "How is performance measured?",
+                "What are the main challenges facing this team?",
+                "What opportunities for growth exist?"
+            ]
+        }
+
+        return jsonify({
+            "app_id": app_id,
+            "prep_questions": questions,
+            "timestamp": "2026-04-15"
+        }), 200
+
+    except Exception as e:
+        logger.error(f"Error generating interview questions: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
 @app.route("/health", methods=["GET"])
 def health():
     """Health check endpoint."""

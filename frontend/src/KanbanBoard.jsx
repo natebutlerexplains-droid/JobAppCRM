@@ -17,6 +17,7 @@ import {
 import { useSortable } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import { ApplicationCard } from './ApplicationCard'
+import { InterviewPrepModal } from './InterviewPrepModal'
 import { updateApplication, deleteApplication } from './api'
 
 const COLUMNS = [
@@ -29,7 +30,7 @@ const COLUMNS = [
 ]
 
 // Draggable card wrapper
-function SortableCard({ id, application, hasSuggestion, onClick, onDelete, isArchived }) {
+function SortableCard({ id, application, hasSuggestion, onClick, onDelete, isArchived, onPrepClick }) {
   const {
     attributes,
     listeners,
@@ -59,6 +60,7 @@ function SortableCard({ id, application, hasSuggestion, onClick, onDelete, isArc
         onClick={onClick}
         onDelete={onDelete}
         isArchived={isArchived}
+        onPrepClick={onPrepClick}
       />
     </div>
   )
@@ -78,7 +80,7 @@ function DraggingCardOverlay({ application, hasSuggestion }) {
 }
 
 // Column container
-function KanbanColumn({ column, items, suggestions, onCardClick, onDelete }) {
+function KanbanColumn({ column, items, suggestions, onCardClick, onDelete, onPrepClick }) {
   const { setNodeRef } = useSortable({
     id: column.id,
     data: {
@@ -119,6 +121,7 @@ function KanbanColumn({ column, items, suggestions, onCardClick, onDelete }) {
               onClick={() => onCardClick(app)}
               onDelete={onDelete}
               isArchived={isArchived}
+              onPrepClick={onPrepClick}
             />
           ))}
         </SortableContext>
@@ -136,6 +139,8 @@ export function KanbanBoard({ applications, suggestions, onCardClick, onApplicat
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
   const [activeId, setActiveId] = useState(null)
+  const [prepModalApp, setPrepModalApp] = useState(null)
+  const [showPrepModal, setShowPrepModal] = useState(false)
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -291,6 +296,10 @@ export function KanbanBoard({ applications, suggestions, onCardClick, onApplicat
               suggestions={suggestions}
               onCardClick={onCardClick}
               onDelete={handleDelete}
+              onPrepClick={(app) => {
+                setPrepModalApp(app)
+                setShowPrepModal(true)
+              }}
             />
           ))}
         </div>
@@ -304,6 +313,16 @@ export function KanbanBoard({ applications, suggestions, onCardClick, onApplicat
           )}
         </DragOverlay>
       </DndContext>
+
+      {/* Interview Prep Modal */}
+      <InterviewPrepModal
+        application={prepModalApp}
+        isOpen={showPrepModal}
+        onClose={() => {
+          setShowPrepModal(false)
+          setPrepModalApp(null)
+        }}
+      />
 
       {loading && (
         <div className="fixed inset-0 bg-black/20 flex items-center justify-center pointer-events-none">

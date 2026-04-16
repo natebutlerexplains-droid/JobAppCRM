@@ -2,13 +2,21 @@ import { Card } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Trash2 } from 'lucide-react'
 
-export function ApplicationCard({ application, hasSuggestion, onClick, onDelete, isArchived }) {
+export function ApplicationCard({ application, hasSuggestion, onClick, onDelete, isArchived, onPrepClick }) {
   const hasPendingSuggestion = hasSuggestion === true
+  const hasRequiredFields = application.company_name && application.job_title && application.job_url
 
   const handleDelete = (e) => {
     e.stopPropagation()
     if (onDelete) {
       onDelete(application.id)
+    }
+  }
+
+  const handlePrepClick = (e) => {
+    e.stopPropagation()
+    if (onPrepClick) {
+      onPrepClick(application)
     }
   }
 
@@ -51,6 +59,19 @@ export function ApplicationCard({ application, hasSuggestion, onClick, onDelete,
             <Badge className="bg-blue-600 text-white border-0 font-bold uppercase text-xs" style={{ borderRadius: '4px', letterSpacing: '0.5px' }}>
               ⚡ Suggestion
             </Badge>
+          </div>
+        )}
+
+        {/* Prep Button - only visible if required fields filled */}
+        {hasRequiredFields && !isArchived && (
+          <div className="pt-4 border-t border-slate-700 mt-4">
+            <button
+              onClick={handlePrepClick}
+              className="w-full px-3 py-2 bg-slate-700 hover:bg-slate-600 text-slate-100 font-bold uppercase text-xs transition-colors"
+              style={{ borderRadius: '0px', letterSpacing: '0.5px' }}
+            >
+              📚 Interview Prep
+            </button>
           </div>
         )}
       </div>
