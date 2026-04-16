@@ -39,8 +39,13 @@ class GeminiClassifier:
     """Classifies job application emails using Google Gemini API."""
 
     def __init__(self):
+        if not Config.GEMINI_API_KEY:
+            logger.warning("⚠️  GEMINI_API_KEY not configured! Set GEMINI_API_KEY environment variable.")
+            raise ValueError("GEMINI_API_KEY environment variable is required")
+
         genai.configure(api_key=Config.GEMINI_API_KEY)
         self.model = genai.GenerativeModel(Config.GEMINI_MODEL)
+        logger.info(f"✅ Gemini API initialized with model: {Config.GEMINI_MODEL}")
 
     def _extract_json(self, text: str) -> Optional[Dict[str, Any]]:
         """Extract JSON from text, handling markdown code fences."""
@@ -464,13 +469,23 @@ If you cannot determine the information, set it to null. The subject line is the
         website_content = None
         web_crawled = False
 
+        logger.info(f"🔍 Starting research for {company_name} ({job_title})")
+
         # Step 1: Try to fetch and parse website if URL provided
         if company_website:
+            logger.info(f"🌐 Fetching website: {company_website}")
             website_content = self._fetch_and_parse_website(company_website)
             web_crawled = website_content is not None
+            if web_crawled:
+                logger.info(f"✅ Website fetched successfully ({len(website_content)} chars)")
+            else:
+                logger.info(f"⚠️  Website fetch failed, will use pure Gemini knowledge")
+        else:
+            logger.info("ℹ️  No website provided, using pure Gemini knowledge")
 
         # Step 2: Call Gemini with website content context
         gemini_rate_limiter.wait()
+        logger.info(f"🤖 Calling Gemini API ({Config.GEMINI_MODEL}) to research company...")
 
         website_context = ""
         if website_content:
@@ -502,14 +517,16 @@ Focus on information useful for interviewing for a {job_title} role at {company_
                 max_output_tokens=1000,
             ))
 
+            logger.info(f"✅ Gemini API response received ({len(response.text)} chars)")
             result = self._extract_json(response.text)
+
             if result and result.get("company_overview"):
-                logger.info(f"Researched company: {company_name} (web_crawled={web_crawled})")
+                logger.info(f"✅ Successfully researched {company_name} (web_crawled={web_crawled}, source={'website_content' if web_crawled else 'gemini_knowledge'})")
                 result["web_crawled"] = web_crawled
                 result["data_source"] = "website_content" if web_crawled else "gemini_knowledge"
                 return result
             else:
-                logger.warning(f"Company research returned incomplete data: {result}")
+                logger.warning(f"⚠️  Company research returned incomplete data: {result}")
                 return {
                     "company_overview": f"Unable to gather detailed information about {company_name}",
                     "key_products": [],
@@ -524,7 +541,7 @@ Focus on information useful for interviewing for a {job_title} role at {company_
                 }
 
         except Exception as e:
-            logger.error(f"Company research failed: {e}")
+            logger.error(f"❌ Company research FAILED: {e}", exc_info=True)
             return {
                 "company_overview": None,
                 "key_products": [],

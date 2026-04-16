@@ -21,6 +21,10 @@ class Config:
     LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")
     LOG_DIR = "./logs"
 
+    # Gemini API
+    GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
+    GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-1.5-flash")
+
 
 def setup_logging():
     """Set up logging configuration."""

@@ -4,24 +4,44 @@ import { saveInterviewPrepSession } from './interviewPrepStorage'
 import { X, ChevronDown } from 'lucide-react'
 
 // Expandable tile component
-function ResearchTile({ title, icon, content, loading }) {
+function ResearchTile({ title, icon, content, loading, isEmpty, isEditing, onEdit, fieldValue, onFieldChange }) {
   const [expanded, setExpanded] = useState(false)
 
   return (
-    <div className="border border-slate-700 bg-slate-800/50 overflow-hidden">
+    <div className={`border overflow-hidden ${isEmpty ? 'border-orange-700 bg-orange-900/20' : 'border-slate-700 bg-slate-800/50'}`}>
       <button
         onClick={() => !loading && setExpanded(!expanded)}
         disabled={loading}
         className="w-full px-4 py-3 flex items-center justify-between hover:bg-slate-700/50 transition disabled:opacity-50 disabled:cursor-not-allowed"
       >
-        <span className="font-bold text-white uppercase text-sm" style={{ letterSpacing: '0.5px' }}>
-          {icon} {title}
+        <span className={`font-bold uppercase text-sm ${isEmpty ? 'text-orange-400' : 'text-white'}`} style={{ letterSpacing: '0.5px' }}>
+          {icon} {title} {isEmpty && <span className="text-xs ml-2">⚠️ Unable to find</span>}
         </span>
-        <ChevronDown className={`w-4 h-4 text-slate-400 transition ${expanded ? 'rotate-180' : ''}`} />
+        <ChevronDown className={`w-4 h-4 ${isEmpty ? 'text-orange-400' : 'text-slate-400'} transition ${expanded ? 'rotate-180' : ''}`} />
       </button>
-      {expanded && !loading && content && (
+      {expanded && !loading && (
         <div className="px-4 py-3 border-t border-slate-700 bg-slate-900/50 text-slate-300 text-sm space-y-2">
-          {content}
+          {content ? (
+            <div>{content}</div>
+          ) : isEditing ? (
+            <textarea
+              value={fieldValue || ''}
+              onChange={onFieldChange}
+              placeholder="Enter information here..."
+              className="w-full px-2 py-2 bg-slate-800 border border-slate-600 text-white text-sm rounded"
+              rows="4"
+            />
+          ) : (
+            <p className="text-slate-500 italic">No data available. Click edit to add information.</p>
+          )}
+          {isEmpty && isEditing && (
+            <button
+              onClick={onEdit}
+              className="mt-2 px-2 py-1 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded"
+            >
+              Save
+            </button>
+          )}
         </div>
       )}
       {loading && (
@@ -39,6 +59,8 @@ export function InterviewPrepPage({ application, onBack }) {
   const [researching, setResearching] = useState(false)
   const [generatingQuestions, setGeneratingQuestions] = useState(false)
   const [error, setError] = useState(null)
+  const [isEditing, setIsEditing] = useState(false)
+  const [editedFields, setEditedFields] = useState({})
 
   const handleResearch = async () => {
     setResearching(true)
@@ -237,16 +259,39 @@ export function InterviewPrepPage({ application, onBack }) {
             )}
           </div>
 
+          <div className="flex gap-2 mb-3">
+            <button
+              onClick={() => setIsEditing(!isEditing)}
+              className={`px-4 py-2 font-bold uppercase text-sm transition-colors ${
+                isEditing
+                  ? 'bg-green-600 hover:bg-green-700 text-white'
+                  : 'bg-slate-700 hover:bg-slate-600 text-white'
+              }`}
+              style={{ borderRadius: '0px' }}
+            >
+              {isEditing ? '✓ Done Editing' : '✏️ Edit Missing Fields'}
+            </button>
+          </div>
+
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            {researchTiles.map((tile, i) => (
-              <ResearchTile
-                key={i}
-                title={tile.title}
-                icon={tile.icon}
-                content={tile.content}
-                loading={researching}
-              />
-            ))}
+            {researchTiles.map((tile, i) => {
+              const fieldKey = tile.title.toLowerCase().replace(/\s+/g, '_')
+              const isEmpty = !tile.content
+              return (
+                <ResearchTile
+                  key={i}
+                  title={tile.title}
+                  icon={tile.icon}
+                  content={tile.content}
+                  loading={researching}
+                  isEmpty={isEmpty}
+                  isEditing={isEditing && isEmpty}
+                  fieldValue={editedFields[fieldKey] || ''}
+                  onFieldChange={e => setEditedFields({...editedFields, [fieldKey]: e.target.value})}
+                  onEdit={() => console.log(`Saved ${fieldKey}:`, editedFields[fieldKey])}
+                />
+              )
+            })}
           </div>
         </div>
       ) : (
