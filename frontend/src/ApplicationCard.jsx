@@ -23,17 +23,17 @@ export function ApplicationCard({ application, hasSuggestion, onClick, onDelete,
   return (
     <div
       onClick={onClick}
-      className="p-6 bg-slate-800 border border-slate-700 hover:border-blue-500 cursor-pointer group relative transition-colors duration-200"
-      style={{ borderRadius: '0px' }}
+      className="p-6 bg-slate-800 border border-slate-700 hover:border-blue-500 cursor-pointer group relative transition-colors duration-200 h-full flex flex-col"
+      style={{ borderRadius: '0px', minHeight: '280px' }}
     >
-      {/* Delete button - visible on hover */}
+      {/* Delete button - always visible */}
       {onDelete && (
         <button
           onClick={handleDelete}
-          className="absolute top-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity p-2 hover:text-red-400"
+          className="absolute top-4 right-4 p-2 hover:text-red-400 text-slate-500 transition-colors"
           title={isArchived ? 'Permanently delete' : 'Move to trash'}
         >
-          <Trash2 className="w-5 h-5 text-slate-500 hover:text-red-500" />
+          <Trash2 className="w-5 h-5" />
         </button>
       )}
 

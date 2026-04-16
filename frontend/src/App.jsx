@@ -93,9 +93,13 @@ function App() {
         <div className="w-full px-8 py-4">
           <div className="flex justify-between items-center">
             {/* Logo - Left */}
-            <h1 className="text-3xl font-black uppercase tracking-tight text-white" style={{ letterSpacing: '2px' }}>
+            <button
+              onClick={() => setCurrentPage('dashboard')}
+              className="text-3xl font-black uppercase tracking-tight text-white hover:text-blue-400 transition-colors cursor-pointer"
+              style={{ letterSpacing: '2px' }}
+            >
               Job CRM
-            </h1>
+            </button>
 
             {/* Navigation - Center */}
             <div className="flex gap-8">
@@ -204,6 +208,9 @@ function App() {
         onClose={() => {
           setShowCardDetail(false)
           setSelectedApp(null)
+        }}
+        onSave={() => {
+          loadData()
         }}
       />
 

@@ -3,7 +3,7 @@ import { getApplicationInteractions, createInteraction, updateApplication } from
 import { AddInteraction } from './AddInteraction'
 import { X } from 'lucide-react'
 
-export function CardDetail({ application, isOpen, onClose }) {
+export function CardDetail({ application, isOpen, onClose, onSave }) {
   const [interactions, setInteractions] = useState([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
@@ -49,6 +49,9 @@ export function CardDetail({ application, isOpen, onClose }) {
     try {
       await updateApplication(application.id, editData)
       setIsEditing(false)
+      if (onSave) {
+        onSave()
+      }
     } catch (err) {
       setError(`Failed to save: ${err.message}`)
       console.error('Error saving application:', err)
