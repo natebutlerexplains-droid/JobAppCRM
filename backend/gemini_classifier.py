@@ -547,6 +547,9 @@ Now provide the complete JSON response with all 8 fields filled in:"""
             result = self._extract_json(response.text)
 
             if result and result.get("company_overview"):
+                # Track which fields came from fallback
+                fallback_fields = []
+
                 # Check if we're missing key fields and try to fill them with pure Gemini knowledge
                 if not result.get("ceo_info") or not result.get("org_structure"):
                     logger.info(f"📋 Missing CEO/Org info, trying pure knowledge fallback...")
@@ -554,14 +557,19 @@ Now provide the complete JSON response with all 8 fields filled in:"""
                     if fallback_result:
                         if not result.get("ceo_info") and fallback_result.get("ceo_info"):
                             result["ceo_info"] = fallback_result["ceo_info"]
+                            fallback_fields.append("ceo_info")
                         if not result.get("org_structure") and fallback_result.get("org_structure"):
                             result["org_structure"] = fallback_result["org_structure"]
+                            fallback_fields.append("org_structure")
                         if not result.get("recent_news") or not result["recent_news"]:
                             result["recent_news"] = fallback_result.get("recent_news", [])
+                            if fallback_result.get("recent_news"):
+                                fallback_fields.append("recent_news")
 
-                logger.info(f"✅ Successfully researched {company_name} (web_crawled={web_crawled}, source={'website_content' if web_crawled else 'gemini_knowledge'})")
+                logger.info(f"✅ Successfully researched {company_name} (web_crawled={web_crawled}, source={'website_content' if web_crawled else 'gemini_knowledge'}, fallback_fields={fallback_fields})")
                 result["web_crawled"] = web_crawled
                 result["data_source"] = "website_content" if web_crawled else "gemini_knowledge"
+                result["fallback_fields"] = fallback_fields
                 return result
             else:
                 logger.warning(f"⚠️  Company research returned incomplete data: {result}")
