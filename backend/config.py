@@ -29,6 +29,22 @@ class Config:
     GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
     GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-1.5-flash")
 
+    # Load all available Gemini API keys (primary + fallbacks)
+    # Primary: GEMINI_API_KEY
+    # Fallbacks: GEMINI_API_KEY_2, GEMINI_API_KEY_3, etc.
+    GEMINI_API_KEYS = []
+    for i in range(1, 11):  # Support up to 10 keys
+        if i == 1:
+            key = GEMINI_API_KEY
+        else:
+            key = os.getenv(f"GEMINI_API_KEY_{i}", "")
+        if key:
+            GEMINI_API_KEYS.append(key)
+
+    # Fallback to single key if no multi-key configured
+    if not GEMINI_API_KEYS and GEMINI_API_KEY:
+        GEMINI_API_KEYS = [GEMINI_API_KEY]
+
     # Email sync
     EMAIL_SYNC_DAYS_BACK = int(os.getenv("EMAIL_SYNC_DAYS_BACK", "7"))
     STARTUP_SYNC_THRESHOLD_HOURS = int(os.getenv("STARTUP_SYNC_THRESHOLD_HOURS", "4"))

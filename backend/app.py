@@ -1415,6 +1415,24 @@ def set_sync_schedule():
         return jsonify({"error": str(e)}), 500
 
 
+@app.route("/api/settings/gemini-keys", methods=["GET"])
+def get_gemini_keys_status():
+    """Get Gemini API key status and quota information."""
+    try:
+        from key_manager import key_manager
+
+        status = key_manager.get_status()
+        # Add quota limit to status response
+        status["quota_limit"] = 1500  # Free tier daily limit per key
+        status["quota_resets_at"] = "midnight UTC"
+        status["retry_available"] = status["keys_available"] > 1
+
+        return jsonify(status), 200
+    except Exception as e:
+        logger.error(f"Error getting Gemini keys status: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
 @app.route("/api/applications/<int:app_id>/prep/research", methods=["POST"])
 def research_company_prep(app_id):
     """Research a company for interview prep with optional website crawling."""
@@ -1437,14 +1455,49 @@ def research_company_prep(app_id):
         # Get or create interview prep
         prep = InterviewPrep.get_or_create(db, app_id)
 
-        # Call enhanced Gemini research with website
-        processor = EmailProcessor(db)
-        research_result = processor.classifier.research_company_with_website(
-            company_name=app["company_name"],
-            job_title=app["job_title"],
-            job_url=app.get("job_url", ""),
-            company_website=company_website
-        )
+        # Research with automatic key rotation on quota exhaustion
+        from google.api_core import exceptions as google_exceptions
+        from key_manager import key_manager
+
+        research_result = None
+        max_attempts = len(Config.GEMINI_API_KEYS)
+        attempt = 0
+
+        while attempt < max_attempts:
+            try:
+                processor = EmailProcessor(db)
+                research_result = processor.classifier.research_company_with_website(
+                    company_name=app["company_name"],
+                    job_title=app["job_title"],
+                    job_url=app.get("job_url", ""),
+                    company_website=company_website
+                )
+                key_manager.record_request()
+                break  # Success, exit loop
+
+            except google_exceptions.ResourceExhausted:
+                # Current key's quota exceeded - try next key
+                logger.warning(f"⚠️  Quota exceeded on key {key_manager.get_current_key_id()}, rotating to next key...")
+                if not key_manager.rotate_to_next_key():
+                    # No more keys available
+                    return jsonify({
+                        "error": f"All Gemini API keys have exhausted their daily quota (1500 requests/day). "
+                                f"Keys exhausted: {key_manager.get_status()['quota_exhausted']}. "
+                                f"Quota resets at midnight UTC.",
+                        "status": key_manager.get_status(),
+                        "retry_after": "approximately 24 hours"
+                    }), 429
+
+                # Attempt with new key
+                attempt += 1
+                continue
+
+            except Exception as e:
+                logger.error(f"Research error: {e}")
+                return jsonify({"error": str(e)}), 500
+
+        if research_result is None:
+            return jsonify({"error": "Research failed - no valid API keys available"}), 500
 
         # Only save research if it succeeded (has actual data, not error state)
         if research_result.get("data_source") != "error" and (research_result.get("company_overview") or len(research_result.get("key_products", [])) > 0):
@@ -1455,7 +1508,7 @@ def research_company_prep(app_id):
                 "data_source": research_result.get("data_source", "gemini_knowledge")
             }
             InterviewPrep.update(db, prep["id"], update_fields)
-            logger.info(f"✅ Research data saved for {app['company_name']}")
+            logger.info(f"✅ Research data saved for {app['company_name']} (using key {key_manager.get_current_key_id()})")
         else:
             # Research failed (API error, quota exceeded, etc.) - don't overwrite existing data
             logger.warning(f"⚠️  Research failed - not overwriting existing data. Reason: {research_result.get('data_source')}")
@@ -1467,11 +1520,11 @@ def research_company_prep(app_id):
                 # Return existing data with error status so frontend knows research failed
                 return jsonify(updated_prep), 200
             else:
-                # No existing data and new research failed - return 429 for quota exceeded
+                # No existing data and new research failed
                 return jsonify({
-                    "error": "Gemini API quota exceeded (limit: 20 requests/day per model). The daily quota will reset tomorrow.",
-                    "retry_after": "approximately 24 hours"
-                }), 429
+                    "error": "Research failed - no data returned from Gemini API",
+                    "retry_after": "try again in a few minutes"
+                }), 500
 
         # Fetch updated prep
         updated_prep = InterviewPrep.get_by_id(db, prep["id"])

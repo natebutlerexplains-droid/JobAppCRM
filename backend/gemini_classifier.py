@@ -5,6 +5,7 @@ import re
 from datetime import datetime, timedelta
 from typing import Dict, Any, Optional
 import google.generativeai as genai
+from google.api_core import exceptions as google_exceptions
 import requests
 from bs4 import BeautifulSoup
 
@@ -38,12 +39,23 @@ gemini_rate_limiter = RateLimiter(requests_per_second=1)
 class GeminiClassifier:
     """Classifies job application emails using Google Gemini API."""
 
-    def __init__(self):
-        if not Config.GEMINI_API_KEY:
+    def __init__(self, api_key=None):
+        # Use provided key, or get from key manager if available, or use primary key
+        if api_key:
+            self.api_key = api_key
+        else:
+            try:
+                from key_manager import key_manager
+                self.api_key = key_manager.get_current_key()
+                logger.info(f"Using Gemini API key {key_manager.get_current_key_id()}/{len(key_manager.keys)}")
+            except ImportError:
+                self.api_key = Config.GEMINI_API_KEY
+
+        if not self.api_key:
             logger.warning("⚠️  GEMINI_API_KEY not configured! Set GEMINI_API_KEY environment variable.")
             raise ValueError("GEMINI_API_KEY environment variable is required")
 
-        genai.configure(api_key=Config.GEMINI_API_KEY)
+        genai.configure(api_key=self.api_key)
         self.model = genai.GenerativeModel(Config.GEMINI_MODEL)
         logger.info(f"✅ Gemini API initialized with model: {Config.GEMINI_MODEL}")
 
@@ -541,10 +553,20 @@ EXACT JSON RESPONSE FORMAT:
 RESPOND WITH ONLY THE JSON OBJECT, NOTHING ELSE:"""
 
         try:
-            response = self.model.generate_content(prompt, generation_config=genai.types.GenerationConfig(
-                temperature=0.5,
-                max_output_tokens=4000,
-            ))
+            try:
+                response = self.model.generate_content(prompt, generation_config=genai.types.GenerationConfig(
+                    temperature=0.5,
+                    max_output_tokens=4000,
+                ))
+            except google_exceptions.ResourceExhausted as e:
+                logger.error(f"❌ Gemini API quota exhausted: {e}")
+                # Mark key as exhausted and re-raise for caller to handle
+                try:
+                    from key_manager import key_manager
+                    key_manager.mark_quota_exhausted()
+                except ImportError:
+                    pass
+                raise  # Re-raise so research_company_prep can catch and rotate keys
 
             logger.info(f"✅ Gemini API response received ({len(response.text)} chars)")
             result = self._extract_json(response.text)
