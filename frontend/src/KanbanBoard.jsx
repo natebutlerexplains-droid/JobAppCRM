@@ -93,14 +93,14 @@ function KanbanColumn({ column, items, suggestions, onCardClick, onDelete, onPre
   const isArchived = column.isTrash
 
   return (
-    <div className="flex flex-col gap-8 min-h-[600px]">
-      <div className={`font-black text-xl uppercase flex items-center gap-3 pb-4 border-b-2 ${
+    <div className="flex flex-col gap-8 min-h-[600px] w-full">
+      <div className={`font-black text-xl uppercase flex items-center gap-3 pb-4 border-b-2 truncate ${
         isArchived
           ? 'text-red-500 border-red-500'
           : 'text-white border-slate-600'
       }`} style={{ letterSpacing: '1px' }}>
         {column.label}
-        <span className="ml-auto text-slate-500 font-normal text-sm lowercase" style={{ letterSpacing: '0px' }}>{items.length} items</span>
+        <span className="ml-auto text-slate-500 font-normal text-sm lowercase whitespace-nowrap" style={{ letterSpacing: '0px' }}>{items.length} items</span>
       </div>
       <div
         ref={setNodeRef}
@@ -292,7 +292,7 @@ export function KanbanBoard({ applications, suggestions, onCardClick, onApplicat
         onDragStart={handleDragStart}
         onDragEnd={handleDragEnd}
       >
-        <div className="grid grid-cols-6 gap-6 overflow-x-auto pb-4">
+        <div className="grid grid-cols-6 gap-6 overflow-x-auto pb-4 w-full">
           {COLUMNS.map(column => (
             <KanbanColumn
               key={column.id}
