@@ -17,7 +17,7 @@ import {
 import { useSortable } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import { ApplicationCard } from './ApplicationCard'
-import { updateApplication } from './api'
+import { updateApplication, deleteApplication } from './api'
 
 const COLUMNS = [
   { id: 'Submitted', label: 'Submitted' },
@@ -200,11 +200,7 @@ export function KanbanBoard({ applications, suggestions, onCardClick, onApplicat
         onApplicationsChange(updatedApps)
       } else {
         // Permanently delete
-        const response = await fetch(`http://localhost:5001/api/applications/${appId}`, {
-          method: 'DELETE',
-        })
-        if (!response.ok) throw new Error('Failed to delete application')
-
+        await deleteApplication(appId)
         const updatedApps = applications.filter(a => a.id !== appId)
         onApplicationsChange(updatedApps)
       }
