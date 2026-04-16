@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { researchCompanyPrep, generateInterviewQuestions } from './api'
+import { saveInterviewPrepSession } from './interviewPrepStorage'
 import { X } from 'lucide-react'
 
 export function InterviewPrepModal({ application, isOpen, onClose }) {
@@ -34,6 +35,8 @@ export function InterviewPrepModal({ application, isOpen, onClose }) {
       const res = await generateInterviewQuestions(application.id)
       setQuestions(res.data)
       setStep('questions')
+      // Save session when questions are generated
+      saveInterviewPrepSession(application.id, application.company_name, application.job_title, research, res.data)
     } catch (err) {
       setError(err.message)
     } finally {

@@ -4,6 +4,7 @@ import { KanbanBoard } from './KanbanBoard'
 import { CardDetail } from './CardDetail'
 import { NewApplicationForm } from './NewApplicationForm'
 import { Settings } from './Settings'
+import { InterviewPrepHistory } from './InterviewPrepHistory'
 import './App.css'
 
 function App() {
@@ -114,6 +115,17 @@ function App() {
                 Dashboard
               </button>
               <button
+                onClick={() => setCurrentPage('interview-prep')}
+                className={`font-bold uppercase text-xs tracking-widest transition-colors pb-2 border-b-2 ${
+                  currentPage === 'interview-prep'
+                    ? 'text-blue-400 border-blue-400'
+                    : 'text-slate-500 border-transparent hover:text-slate-300'
+                }`}
+                style={{ letterSpacing: '0.5px' }}
+              >
+                Interview Prep
+              </button>
+              <button
                 onClick={() => setCurrentPage('settings')}
                 className={`font-bold uppercase text-xs tracking-widest transition-colors pb-2 border-b-2 ${
                   currentPage === 'settings'
@@ -144,6 +156,7 @@ function App() {
       <main className="flex-1 flex flex-col">
         <div className="flex-1 w-full px-8 py-8">
           {currentPage === 'settings' && <Settings />}
+          {currentPage === 'interview-prep' && <InterviewPrepHistory />}
           {currentPage === 'dashboard' && (
             <>
               {/* Stats Bar */}
