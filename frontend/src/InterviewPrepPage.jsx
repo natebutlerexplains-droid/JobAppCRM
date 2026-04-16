@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { ChevronDown } from 'lucide-react'
-import { researchCompanyPrep, generateInterviewQuestions, saveInterviewPrepSession } from './api'
+import { researchCompanyPrep, generateInterviewQuestions } from './api'
 
 function ResearchTile({ title, icon, content, loading, isEmpty, isEditing, fieldValue, onFieldChange, onEdit, isFromFallback }) {
   const [expanded, setExpanded] = useState(true)
@@ -106,10 +106,6 @@ export function InterviewPrepPage({ application, onBack }) {
     try {
       const res = await generateInterviewQuestions(application.id)
       setPrep(prev => ({ ...prev, ...res.data }))
-      // Save session
-      if (prep?.company_research) {
-        saveInterviewPrepSession(application.id, application.company_name, application.job_title, prep.company_research, res.data.questions)
-      }
     } catch (err) {
       setError(err.message || 'Failed to generate questions')
     } finally {

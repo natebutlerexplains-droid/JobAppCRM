@@ -32,6 +32,6 @@ export const updateStageSuggestion = (id, data) => api.patch(`/stage-suggestions
 
 // Interview Prep
 export const researchCompanyPrep = (appId, data = {}) => api.post(`/applications/${appId}/prep/research`, data)
-export const generateInterviewQuestions = (appId) => api.post(`/applications/${appId}/prep/questions`)
+export const generateInterviewQuestions = (appId) => api.post(`/applications/${appId}/prep/generate`)
 
 export default api
