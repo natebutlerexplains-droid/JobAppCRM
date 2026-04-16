@@ -5,7 +5,7 @@ import { CardDetail } from './CardDetail'
 import { NewApplicationForm } from './NewApplicationForm'
 import { Settings } from './Settings'
 import { InterviewPrepHistory } from './InterviewPrepHistory'
-import { InterviewPrepModal } from './InterviewPrepModal'
+import { InterviewPrepPage } from './InterviewPrepPage'
 import './App.css'
 
 function App() {
@@ -166,17 +166,17 @@ function App() {
           {currentPage === 'settings' && <Settings />}
           {currentPage === 'interview-prep' && (
             <>
-              {interviewPrepApp && (
-                <InterviewPrepModal
+              {interviewPrepApp ? (
+                <InterviewPrepPage
                   application={interviewPrepApp}
-                  isOpen={true}
-                  onClose={() => {
+                  onBack={() => {
                     setInterviewPrepApp(null)
                     setCurrentPage('dashboard')
                   }}
                 />
+              ) : (
+                <InterviewPrepHistory />
               )}
-              {!interviewPrepApp && <InterviewPrepHistory />}
             </>
           )}
           {currentPage === 'dashboard' && (
