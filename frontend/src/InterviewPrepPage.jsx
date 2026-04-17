@@ -293,7 +293,8 @@ ${companyResearch?.hiring_focus || 'N/A'}`
       {researching && (
         <div className="bg-blue-900/30 border border-blue-700 text-blue-300 p-4 text-sm rounded animate-pulse">
           <p className="font-bold">⟳ Researching company...</p>
-          <p className="text-xs text-blue-400 mt-1">Fetching website content and generating insights from Gemini API</p>
+          <p className="text-xs text-blue-400 mt-1">This may take 1-2 minutes. Fetching website content and generating insights with AI</p>
+          <p className="text-xs text-slate-400 mt-2">⏳ Please wait - the API has rate limits we respect to keep the service reliable</p>
         </div>
       )}
 
