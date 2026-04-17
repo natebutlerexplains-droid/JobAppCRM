@@ -289,6 +289,14 @@ ${companyResearch?.hiring_focus || 'N/A'}`
         </div>
       )}
 
+      {/* Loading State */}
+      {researching && (
+        <div className="bg-blue-900/30 border border-blue-700 text-blue-300 p-4 text-sm rounded animate-pulse">
+          <p className="font-bold">⟳ Researching company...</p>
+          <p className="text-xs text-blue-400 mt-1">Fetching website content and generating insights from Gemini API</p>
+        </div>
+      )}
+
       {/* URL Input */}
       <div className="bg-slate-800/50 border border-slate-700 p-4">
         <label className="block text-xs font-bold text-slate-400 mb-2 uppercase" style={{ letterSpacing: '0.5px' }}>
@@ -310,10 +318,10 @@ ${companyResearch?.hiring_focus || 'N/A'}`
             className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold uppercase text-xs transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             style={{ borderRadius: '0px' }}
           >
-            {researching ? '...' : '🔍'}
+            {researching ? '⟳' : '🔍'}
           </button>
         </div>
-        {companyResearch && (
+        {companyResearch && !researching && (
           <p className="text-xs text-slate-500 mt-2">
             {companyResearch.web_crawled
               ? '🤖 Researched via Gemini + Website Content'
