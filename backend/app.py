@@ -39,6 +39,7 @@ CORS(app, resources={
             "http://localhost:3008",
             "http://localhost:3009",
             "http://localhost:3010",
+            "http://localhost:3307",
             "http://127.0.0.1:3000",
             "http://127.0.0.1:3001",
             "http://127.0.0.1:3002",
@@ -49,7 +50,8 @@ CORS(app, resources={
             "http://127.0.0.1:3007",
             "http://127.0.0.1:3008",
             "http://127.0.0.1:3009",
-            "http://127.0.0.1:3010"
+            "http://127.0.0.1:3010",
+            "http://127.0.0.1:3307"
         ],
         "methods": ["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
         "allow_headers": ["Content-Type"],
@@ -606,6 +608,29 @@ def update_application(app_id):
         return jsonify({"error": str(e)}), 400
     except Exception as e:
         logger.error(f"Error updating application: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/applications/reorder", methods=["POST"])
+def reorder_applications():
+    """Bulk update order_position for applications."""
+    try:
+        data = request.json or {}
+        orders = data.get('orders', [])
+
+        if not orders:
+            return jsonify({"error": "No orders provided"}), 400
+
+        # Update each application's order_position
+        for order in orders:
+            app_id = order.get('id')
+            position = order.get('order_position')
+            if app_id is not None and position is not None:
+                Application.update(db, app_id, {'order_position': position})
+
+        return jsonify({"message": "Applications reordered"}), 200
+    except Exception as e:
+        logger.error(f"Error reordering applications: {e}")
         return jsonify({"error": str(e)}), 500
 
 
@@ -1538,6 +1563,44 @@ def research_company_prep(app_id):
 
     except Exception as e:
         logger.error(f"Error researching company: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/applications/<int:app_id>/prep/research-markdown", methods=["POST"])
+def upload_research_markdown(app_id):
+    """Accept uploaded markdown research from user."""
+    try:
+        # Fetch application
+        app = Application.get_by_id(db, app_id)
+        if not app:
+            return jsonify({"error": "Application not found"}), 404
+
+        # Get the parsed markdown research from request
+        data = request.get_json() or {}
+        company_research = data.get("company_research", {})
+
+        # Validate that company_overview is present
+        if not company_research.get("company_overview"):
+            return jsonify({"error": "Research must include Company Overview section"}), 400
+
+        # Get or create prep record
+        prep = InterviewPrep.get_or_create(db, app_id)
+
+        # Save research with markdown_upload source
+        InterviewPrep.update(db, prep["id"], {
+            "company_research": json.dumps(company_research),
+            "data_source": "markdown_upload",
+            "web_crawled": False
+        })
+
+        logger.info(f"✅ Markdown research uploaded for {app['company_name']}")
+
+        # Fetch and return updated prep
+        updated_prep = InterviewPrep.get_by_id(db, prep["id"])
+        return jsonify(updated_prep), 200
+
+    except Exception as e:
+        logger.error(f"Error uploading research markdown: {e}")
         return jsonify({"error": str(e)}), 500
 
 

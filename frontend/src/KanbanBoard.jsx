@@ -1,23 +1,25 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useRef } from 'react'
 import {
   DndContext,
-  closestCorners,
+  closestCenter,
   KeyboardSensor,
   PointerSensor,
   useSensor,
   useSensors,
   DragOverlay,
+  useDroppable,
 } from '@dnd-kit/core'
 import {
   SortableContext,
   sortableKeyboardCoordinates,
   verticalListSortingStrategy,
+  arrayMove,
 } from '@dnd-kit/sortable'
 import { useSortable } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import { ApplicationCard } from './ApplicationCard'
 import { InterviewPrepModal } from './InterviewPrepModal'
-import { updateApplication, deleteApplication } from './api'
+import { updateApplication, deleteApplication, reorderApplications } from './api'
 
 const COLUMNS = [
   { id: 'Submitted', label: 'Submitted' },
@@ -58,38 +60,54 @@ function DraggingCardOverlay({ application, hasSuggestion }) {
   )
 }
 
-function KanbanColumn({ column, items, suggestions, onCardClick, onDelete, onPrepClick, onNavToInterview }) {
-  const { setNodeRef, isOver } = useSortable({ id: column.id, data: { type: 'Column', column } })
+function KanbanColumn({ column, items, suggestions, onCardClick, onDelete, onPrepClick, onNavToInterview, isOver, overPosition }) {
+  const { setNodeRef, isOver: isOverDroppable } = useDroppable({
+    id: column.id,
+    data: { type: 'Column', column }
+  })
   const suggestionsMap = new Map(suggestions.map(s => [s.application_id, true]))
 
   return (
-    <div className="flex flex-col gap-8 min-h-[600px] w-full">
-      <div className="font-black text-xl uppercase pb-4 border-b-2 text-center text-white border-slate-600" style={{ letterSpacing: '1px' }}>
-        {column.label}
+    <div className="flex flex-col gap-4 h-[800px] w-full">
+      <div className="font-black text-xl uppercase pb-2 border-b-2 text-center text-white border-slate-600 flex items-center justify-center gap-2" style={{ letterSpacing: '1px' }}>
+        <span>{column.label}</span>
+        <span className="text-sm font-normal text-slate-400">{items.length}</span>
       </div>
       <div
         ref={setNodeRef}
-        className={`space-y-4 flex-1 p-6 min-h-[500px] transition-colors duration-200 border ${
-          isOver ? 'bg-blue-900/40 border-blue-500' : 'bg-slate-800/30 border-slate-700'
+        className={`flex-1 p-4 overflow-y-auto transition-all duration-150 border-2 ${
+          isOver ? 'bg-blue-900/60 border-blue-400 ring-2 ring-blue-500/50 shadow-lg shadow-blue-500/30' : 'bg-slate-800/30 border-slate-700'
         }`}
-        style={{ borderRadius: '0px' }}
+        style={{ borderRadius: '8px' }}
       >
         <SortableContext items={items.map(i => i.id)} strategy={verticalListSortingStrategy}>
-          {items.map(app => (
-            <SortableCard
-              key={app.id}
-              id={app.id}
-              application={app}
-              hasSuggestion={suggestionsMap.has(app.id)}
-              onClick={() => onCardClick(app)}
-              onDelete={onDelete}
-              isArchived={false}
-              onPrepClick={onNavToInterview || onPrepClick}
-            />
+          {isOver && overPosition === 'top' && (
+            <div className="h-1 bg-blue-400 mb-3 rounded" />
+          )}
+          {items.map((app, idx) => (
+            <div key={app.id} className={idx > 0 ? 'mt-3' : ''}>
+              <SortableCard
+                id={app.id}
+                application={app}
+                hasSuggestion={suggestionsMap.has(app.id)}
+                onClick={() => onCardClick(app)}
+                onDelete={onDelete}
+                isArchived={false}
+                onPrepClick={onNavToInterview || onPrepClick}
+              />
+              {isOver && overPosition === 'between' && (
+                <div className="h-1 bg-blue-400 mt-3 mb-3 rounded" />
+              )}
+            </div>
           ))}
+          {isOver && overPosition === 'bottom' && (
+            <div className="h-1 bg-blue-400 mt-3 rounded" />
+          )}
         </SortableContext>
         {items.length === 0 && (
-          <div className="text-center text-slate-500 text-sm py-8">No applications</div>
+          <div className={`text-center text-sm py-8 ${isOver ? 'text-blue-400' : 'text-slate-500'}`}>
+            {isOver ? 'Drop here' : 'No applications'}
+          </div>
         )}
       </div>
     </div>
@@ -103,6 +121,10 @@ export function KanbanBoard({ applications, suggestions, onCardClick, onRefresh,
   const [prepModalApp, setPrepModalApp] = useState(null)
   const [showPrepModal, setShowPrepModal] = useState(false)
   const [showArchived, setShowArchived] = useState(false)
+  const [overColumnId, setOverColumnId] = useState(null)
+  const [overPosition, setOverPosition] = useState(null)
+  const [localOrder, setLocalOrder] = useState({})
+  const dragRef = useRef(null)
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
@@ -119,7 +141,42 @@ export function KanbanBoard({ applications, suggestions, onCardClick, onRefresh,
     return grouped
   }, [applications])
 
-  const handleDragStart = (event) => setActiveId(event.active.id)
+  const handleDragStart = (event) => {
+    setActiveId(event.active.id)
+    dragRef.current = { startY: event.active.rect.initial?.top || 0 }
+  }
+
+  const handleDragOver = (event) => {
+    const { over, active, delta } = event
+    if (!over) {
+      setOverColumnId(null)
+      setOverPosition(null)
+      return
+    }
+
+    // Resolve to a column id whether pointer is over column zone or a card inside it
+    const directColumn = COLUMNS.some(col => col.id === over.id)
+    const resolvedColumnId = directColumn
+      ? over.id
+      : COLUMNS.find(col => items[col.id]?.some(a => a.id === over.id))?.id
+    if (resolvedColumnId) {
+      setOverColumnId(resolvedColumnId)
+
+      // Determine position within column based on delta movement
+      if (delta && dragRef.current) {
+        const threshold = 60
+        if (delta.y < -threshold) {
+          setOverPosition('top')
+        } else if (delta.y > threshold) {
+          setOverPosition('bottom')
+        } else {
+          setOverPosition('between')
+        }
+      } else {
+        setOverPosition('between')
+      }
+    }
+  }
 
   const handleDelete = async (appId) => {
     const app = applications.find(a => a.id === appId)
@@ -152,22 +209,57 @@ export function KanbanBoard({ applications, suggestions, onCardClick, onRefresh,
   const handleDragEnd = async (event) => {
     const { active, over } = event
     setActiveId(null)
+    setOverColumnId(null)
+    setOverPosition(null)
     if (!over) return
 
     const activeAppId = active.id
-    const overColumnId = over.id
     const app = applications.find(a => a.id === activeAppId)
     if (!app) return
 
-    if (COLUMNS.some(col => col.id === overColumnId) && app.status !== overColumnId) {
+    const directColumn = COLUMNS.some(col => col.id === over.id)
+    const targetColumnId = directColumn
+      ? over.id
+      : COLUMNS.find(col => items[col.id]?.some(a => a.id === over.id))?.id
+    if (!targetColumnId) return
+
+    // Case 1: Moving to a different column
+    if (app.status !== targetColumnId) {
       setLoading(true)
       try {
-        await updateApplication(activeAppId, { status: overColumnId })
+        await updateApplication(activeAppId, { status: targetColumnId })
         onRefresh()
       } catch (err) {
         setError(`Failed to update: ${err.message}`)
       } finally {
         setLoading(false)
+      }
+    }
+    // Case 2: Reordering within the same column
+    else if (!directColumn && over.id !== activeAppId) {
+      // over.id is a card id (not a column), so this is a reorder within the same column
+      const columnApps = items[targetColumnId] || []
+      const activeIdx = columnApps.findIndex(a => a.id === activeAppId)
+      const overIdx = columnApps.findIndex(a => a.id === over.id)
+
+      if (activeIdx !== -1 && overIdx !== -1 && activeIdx !== overIdx) {
+        // Create new order and set positions
+        const newOrder = arrayMove(columnApps, activeIdx, overIdx)
+        const updates = newOrder.map((app, idx) => ({
+          id: app.id,
+          order_position: idx
+        }))
+
+        setLoading(true)
+
+        try {
+          await reorderApplications(updates)
+          onRefresh()
+        } catch (err) {
+          setError(`Failed to reorder: ${err.message}`)
+        } finally {
+          setLoading(false)
+        }
       }
     }
   }
@@ -180,18 +272,20 @@ export function KanbanBoard({ applications, suggestions, onCardClick, onRefresh,
         </div>
       )}
 
-      <DndContext sensors={sensors} collisionDetection={closestCorners} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
+      <DndContext sensors={sensors} collisionDetection={closestCenter} onDragStart={handleDragStart} onDragOver={handleDragOver} onDragEnd={handleDragEnd}>
         <div className="grid grid-cols-5 gap-6 pb-4 w-full">
           {COLUMNS.map(column => (
             <KanbanColumn
               key={column.id}
               column={column}
-              items={items[column.id] || []}
+              items={localOrder[column.id] || items[column.id] || []}
               suggestions={suggestions}
               onCardClick={onCardClick}
               onDelete={handleDelete}
               onPrepClick={(app) => { setPrepModalApp(app); setShowPrepModal(true) }}
               onNavToInterview={onNavToInterview}
+              isOver={overColumnId === column.id}
+              overPosition={overColumnId === column.id ? overPosition : null}
             />
           ))}
         </div>

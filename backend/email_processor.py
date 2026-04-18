@@ -4,7 +4,6 @@ Handles email fetching, classification, and application linking.
 """
 
 import logging
-from claude_classifier import ClaudeClassifier
 
 logger = logging.getLogger(__name__)
 
@@ -16,7 +15,7 @@ class EmailProcessor:
         """Initialize email processor."""
         self.db = db
         self.cancel_event = cancel_event
-        self.classifier = ClaudeClassifier()
+        # Note: ClaudeClassifier removed - using manual markdown upload workflow
         logger.info("📧 EmailProcessor initialized")
 
     def process_emails(self, days_back=7):

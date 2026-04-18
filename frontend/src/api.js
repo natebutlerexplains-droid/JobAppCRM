@@ -15,6 +15,7 @@ export const createApplication = (data) => api.post('/applications', data)
 export const getApplication = (id) => api.get(`/applications/${id}`)
 export const updateApplication = (id, data) => api.patch(`/applications/${id}`, data)
 export const deleteApplication = (id) => api.delete(`/applications/${id}`)
+export const reorderApplications = (orders) => api.post('/applications/reorder', { orders })
 
 // Emails
 export const getApplicationEmails = (id) => api.get(`/applications/${id}/emails`)
@@ -33,5 +34,8 @@ export const updateStageSuggestion = (id, data) => api.patch(`/stage-suggestions
 // Interview Prep
 export const researchCompanyPrep = (appId, data = {}) => api.post(`/applications/${appId}/prep/research`, data)
 export const generateInterviewQuestions = (appId) => api.post(`/applications/${appId}/prep/generate`)
+export const uploadMarkdownResearch = (appId, parsedResearch) => api.post(`/applications/${appId}/prep/research-markdown`, {
+  company_research: parsedResearch
+})
 
 export default api

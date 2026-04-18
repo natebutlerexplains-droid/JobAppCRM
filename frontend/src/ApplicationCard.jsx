@@ -46,80 +46,80 @@ export function ApplicationCard({ application, hasSuggestion, onClick, onDelete,
   return (
     <div
       onClick={onClick}
-      className="p-5 bg-slate-800 border border-slate-700 hover:border-blue-500 cursor-pointer relative transition-colors duration-200 flex flex-col"
-      style={{ borderRadius: '0px', minHeight: '220px' }}
+      className="p-3 bg-slate-800 border border-slate-700 hover:border-blue-500 cursor-pointer relative transition-all duration-200 group hover:bg-slate-750"
+      style={{ borderRadius: '8px' }}
     >
       {/* Delete button */}
       {onDelete && (
         <button
           onClick={handleDelete}
-          className="absolute top-3 right-3 p-1.5 text-slate-500 hover:text-red-400 transition-colors z-10"
+          className="absolute top-2 right-2 p-1 text-slate-500 hover:text-red-400 transition-colors z-10"
           title={isArchived ? 'Permanently delete' : 'Move to trash'}
         >
-          <Trash2 className="w-4 h-4" />
+          <Trash2 className="w-3 h-3" />
         </button>
       )}
 
-      {/* Company — Role */}
-      <div className="pr-8 mb-3">
-        <h3 className="font-black text-base leading-tight text-white" style={{ letterSpacing: '0.5px' }}>
-          {application.company_name}
-        </h3>
-        <p className="text-sm text-slate-300 font-medium mt-0.5 leading-tight">
-          {application.job_title}
-        </p>
-      </div>
-
-      {/* Date Applied */}
-      <p className="text-xs text-slate-500 mb-3">
-        Applied {new Date(application.date_submitted).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+      {/* Company + Role */}
+      <h3 className="font-bold text-sm text-white leading-tight pr-6">
+        {application.company_name}
+      </h3>
+      <p className="text-xs text-slate-300 mt-0.5 mb-3">
+        <span className="text-blue-400 font-semibold">{application.job_title}</span>
       </p>
 
-      {/* Compensation row */}
-      {(salaryDisplay || application.employment_type || application.pay_type) && (
-        <div className="mb-2 space-y-1">
-          {salaryDisplay && (
-            <p className="text-xs text-slate-300 font-medium">
-              💰 {salaryDisplay}
-              {application.pay_type && <span className="text-slate-500 ml-1">/ {isHourly ? 'hr' : 'yr'}</span>}
-            </p>
-          )}
-          {targetDisplay && (
-            <p className="text-xs text-blue-400 font-medium">
-              🎯 Target: {targetDisplay}{isHourly ? '/hr' : ''}
-            </p>
-          )}
-        </div>
-      )}
+      {/* Date Applied */}
+      <p className="text-xs text-slate-500 mb-2">
+        Applied {new Date(application.date_submitted).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+      </p>
 
-      {/* Employment type + Work arrangement */}
-      <div className="mb-3 space-y-1">
-        {application.employment_type && (
-          <span className="inline-block px-2 py-0.5 text-xs font-bold uppercase border border-slate-600 text-slate-400 mr-1" style={{ letterSpacing: '0.5px' }}>
-            {application.employment_type}
-          </span>
-        )}
-        {application.work_arrangement && (
-          <span className="inline-block px-2 py-0.5 text-xs font-bold uppercase border border-slate-600 text-slate-400" style={{ letterSpacing: '0.5px' }}>
-            {application.work_arrangement === 'Hybrid' && application.work_arrangement_notes ? `${application.work_arrangement} (${application.work_arrangement_notes})` : application.work_arrangement}
-          </span>
-        )}
+      {/* Primary metrics */}
+      <div className="text-xs text-slate-300 font-medium flex flex-wrap gap-2 items-center mb-2">
+        {application.employment_type && <span className="text-slate-400">{application.employment_type}</span>}
+        {application.work_arrangement && <span className="text-slate-400">{application.work_arrangement}</span>}
       </div>
 
-      {/* Suggestion badge */}
-      <div className="mb-2 flex gap-2 flex-wrap">
+      {/* Status badges */}
+      <div className="flex gap-1 flex-wrap">
         {hasSuggestion && (
-          <span className="inline-block px-2 py-0.5 bg-blue-600 text-white text-xs font-bold uppercase" style={{ borderRadius: '4px' }}>
+          <span className="inline-block px-2 py-0.5 bg-blue-600/40 text-blue-300 text-xs font-bold" style={{ borderRadius: '4px' }}>
             ⚡ Suggestion
           </span>
         )}
         {showFollowUp && (
-          <span className="inline-block px-2 py-0.5 bg-orange-600 text-white text-xs font-bold uppercase" style={{ borderRadius: '4px' }}>
+          <span className="inline-block px-2 py-0.5 bg-orange-600/40 text-orange-300 text-xs font-bold" style={{ borderRadius: '4px' }}>
             ⏰ Follow-up
           </span>
         )}
       </div>
 
+      {/* Hidden details - show on hover */}
+      <div className="text-xs text-slate-400 mt-3 pt-3 border-t border-slate-700 hidden group-hover:block space-y-2">
+        {targetDisplay && (
+          <div className="text-blue-400">🎯 Target: {targetDisplay}{isHourly ? '/hr' : ''}</div>
+        )}
+        {application.job_location && (
+          <div className="text-slate-300">📍 {application.job_location}</div>
+        )}
+        {application.work_arrangement_notes && (
+          <div className="text-slate-500">Details: {application.work_arrangement_notes}</div>
+        )}
+        {application.notes && (
+          <div className="text-slate-400 italic">"{application.notes.substring(0, 80)}{application.notes.length > 80 ? '...' : ''}"</div>
+        )}
+        {application.company_website && (
+          <div className="text-slate-500 truncate">Site: {application.company_website}</div>
+        )}
+        {onPrepClick && (
+          <button
+            onClick={handlePrepClick}
+            className="w-full mt-2 px-2 py-1.5 bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold uppercase transition-colors"
+            style={{ borderRadius: '4px' }}
+          >
+            📚 Interview Prep
+          </button>
+        )}
+      </div>
     </div>
   )
 }

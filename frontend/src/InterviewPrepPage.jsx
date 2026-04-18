@@ -1,6 +1,9 @@
-import { useState } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { ChevronDown } from 'lucide-react'
-import { researchCompanyPrep, generateInterviewQuestions } from './api'
+import { researchCompanyPrep, generateInterviewQuestions, uploadMarkdownResearch } from './api'
+import { parseMarkdownResearch } from './utils/markdownParser'
+import { formatMarkdownText } from './utils/markdownFormatter.jsx'
+import { PromptTemplateModal } from './components/PromptTemplateModal'
 
 function ResearchTile({ title, icon, content, loading, isEmpty, isEditing, fieldValue, onFieldChange, onEdit, isFromFallback, isError }) {
   const [expanded, setExpanded] = useState(true)
@@ -85,9 +88,15 @@ export function InterviewPrepPage({ application, onBack }) {
   const [companyWebsite, setCompanyWebsite] = useState(application?.company_website || '')
   const [researching, setResearching] = useState(false)
   const [generatingQuestions, setGeneratingQuestions] = useState(false)
+  const [uploadLoading, setUploadLoading] = useState(false)
   const [error, setError] = useState(null)
   const [isEditing, setIsEditing] = useState(false)
   const [editedFields, setEditedFields] = useState({})
+  const [showPromptModal, setShowPromptModal] = useState(false)
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false)
+  const [isSaving, setIsSaving] = useState(false)
+  const fileInputRef = useRef(null)
+  const saveTimeoutRef = useRef(null)
 
   const handleResearch = async () => {
     setResearching(true)
@@ -117,6 +126,117 @@ export function InterviewPrepPage({ application, onBack }) {
       setError(err.message || 'Failed to generate questions')
     } finally {
       setGeneratingQuestions(false)
+    }
+  }
+
+  // Load existing prep data when page opens
+  useEffect(() => {
+    const loadPrepData = async () => {
+      try {
+        const res = await researchCompanyPrep(application.id)
+        const prepData = { ...res.data }
+        if (typeof prepData.company_research === 'string') {
+          prepData.company_research = JSON.parse(prepData.company_research)
+        }
+        if (typeof prepData.interview_questions === 'string') {
+          prepData.interview_questions = JSON.parse(prepData.interview_questions)
+        }
+        if (typeof prepData.questions_to_ask === 'string') {
+          prepData.questions_to_ask = JSON.parse(prepData.questions_to_ask)
+        }
+        setPrep(prepData)
+      } catch (err) {
+        // No prep data exists yet, that's ok
+      }
+    }
+    loadPrepData()
+  }, [application.id])
+
+  // Auto-save when there are unsaved changes
+  useEffect(() => {
+    if (!hasUnsavedChanges || Object.keys(editedFields).length === 0) return
+
+    // Clear existing timeout
+    if (saveTimeoutRef.current) {
+      clearTimeout(saveTimeoutRef.current)
+    }
+
+    // Set new timeout to auto-save after 1 second
+    saveTimeoutRef.current = setTimeout(() => {
+      handleSaveChanges()
+    }, 1000)
+
+    return () => {
+      if (saveTimeoutRef.current) {
+        clearTimeout(saveTimeoutRef.current)
+      }
+    }
+  }, [hasUnsavedChanges, editedFields])
+
+  const handleSaveChanges = async () => {
+    if (Object.keys(editedFields).length === 0) return
+
+    setIsSaving(true)
+    try {
+      const companyResearch = typeof prep?.company_research === 'string'
+        ? JSON.parse(prep.company_research)
+        : prep?.company_research || {}
+
+      const updatedResearch = {
+        ...companyResearch,
+        ...editedFields
+      }
+
+      const res = await uploadMarkdownResearch(application.id, updatedResearch)
+
+      if (typeof res.data.company_research === 'string') {
+        res.data.company_research = JSON.parse(res.data.company_research)
+      }
+
+      setPrep(res.data)
+      setEditedFields({})
+      setHasUnsavedChanges(false)
+      setError(null)
+    } catch (err) {
+      setError(`Failed to save changes: ${err.message}`)
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
+  const handleFileUpload = async (event) => {
+    const file = event.target.files?.[0]
+    if (!file || !file.name.endsWith('.md')) {
+      setError('Please upload a .md file')
+      return
+    }
+
+    setUploadLoading(true)
+    setError(null)
+
+    try {
+      const text = await file.text()
+      const parsed = parseMarkdownResearch(text)
+
+      // Save to database via API
+      const res = await uploadMarkdownResearch(application.id, parsed)
+
+      // Update prep data
+      if (typeof res.data.company_research === 'string') {
+        res.data.company_research = JSON.parse(res.data.company_research)
+      }
+      setPrep(res.data)
+      setEditedFields({})
+      setHasUnsavedChanges(false)
+      setError(null)
+    } catch (err) {
+      setError(`Upload failed: ${err.message}`)
+    } finally {
+      setUploadLoading(false)
+      // Reset file input
+      if (fileInputRef.current) {
+        fileInputRef.current.value = ''
+      }
     }
   }
 
@@ -185,7 +305,7 @@ ${companyResearch?.hiring_focus || 'N/A'}`
       icon: '🏢',
       fieldKey: 'company_overview',
       content: companyResearch?.company_overview && (
-        <p>{companyResearch.company_overview}</p>
+        <div className="text-sm leading-relaxed">{formatMarkdownText(companyResearch.company_overview)}</div>
       )
     },
     {
@@ -196,13 +316,13 @@ ${companyResearch?.hiring_focus || 'N/A'}`
         Array.isArray(companyResearch.key_products) ? (
           <ul className="space-y-2 ml-4">
             {companyResearch.key_products.map((item, i) => (
-              <li key={i} className="list-disc text-slate-300">
-                {item}
+              <li key={i} className="list-disc text-slate-300 text-sm">
+                {formatMarkdownText(item)}
               </li>
             ))}
           </ul>
         ) : (
-          <p>{companyResearch.key_products}</p>
+          <div className="text-sm leading-relaxed">{formatMarkdownText(companyResearch.key_products)}</div>
         )
       )
     },
@@ -211,7 +331,7 @@ ${companyResearch?.hiring_focus || 'N/A'}`
       icon: '🎯',
       fieldKey: 'company_culture',
       content: companyResearch?.company_culture && (
-        <p>{companyResearch.company_culture}</p>
+        <div className="text-sm leading-relaxed">{formatMarkdownText(companyResearch.company_culture)}</div>
       )
     },
     {
@@ -219,7 +339,7 @@ ${companyResearch?.hiring_focus || 'N/A'}`
       icon: '🏛️',
       fieldKey: 'org_structure',
       content: companyResearch?.org_structure && (
-        <p>{companyResearch.org_structure}</p>
+        <div className="text-sm leading-relaxed">{formatMarkdownText(companyResearch.org_structure)}</div>
       )
     },
     {
@@ -227,7 +347,7 @@ ${companyResearch?.hiring_focus || 'N/A'}`
       icon: '👔',
       fieldKey: 'ceo_info',
       content: companyResearch?.ceo_info && (
-        <p>{companyResearch.ceo_info}</p>
+        <div className="text-sm leading-relaxed">{formatMarkdownText(companyResearch.ceo_info)}</div>
       )
     },
     {
@@ -238,11 +358,13 @@ ${companyResearch?.hiring_focus || 'N/A'}`
         Array.isArray(companyResearch.recent_news) ? (
           <ul className="space-y-2">
             {companyResearch.recent_news.map((news, i) => (
-              <li key={i} className="text-sm">{news}</li>
+              <li key={i} className="text-sm list-disc ml-4 text-slate-300">
+                {formatMarkdownText(news)}
+              </li>
             ))}
           </ul>
         ) : (
-          <p>{companyResearch.recent_news}</p>
+          <div className="text-sm leading-relaxed">{formatMarkdownText(companyResearch.recent_news)}</div>
         )
       )
     },
@@ -251,7 +373,7 @@ ${companyResearch?.hiring_focus || 'N/A'}`
       icon: '📊',
       fieldKey: 'industry_relevance',
       content: companyResearch?.industry_relevance && (
-        <p>{companyResearch.industry_relevance}</p>
+        <div className="text-sm leading-relaxed">{formatMarkdownText(companyResearch.industry_relevance)}</div>
       )
     },
     {
@@ -259,28 +381,47 @@ ${companyResearch?.hiring_focus || 'N/A'}`
       icon: '🎖️',
       fieldKey: 'hiring_focus',
       content: companyResearch?.hiring_focus && (
-        <p>{companyResearch.hiring_focus}</p>
+        <div className="text-sm leading-relaxed">{formatMarkdownText(companyResearch.hiring_focus)}</div>
       )
     }
   ]
 
   return (
     <div className="w-full space-y-6">
-      {/* Header with back button */}
-      <div className="flex justify-between items-start">
+      {/* Modal */}
+      <PromptTemplateModal isOpen={showPromptModal} onClose={() => setShowPromptModal(false)} />
+
+      {/* Header with back button and save button in top right */}
+      <div className="flex justify-between items-start gap-4">
         <div>
           <h1 className="text-3xl font-black uppercase text-white" style={{ letterSpacing: '1px' }}>
             Interview Prep
           </h1>
           <p className="text-slate-400 text-sm mt-1 font-medium">{application.company_name} • {application.job_title}</p>
         </div>
-        <button
-          onClick={onBack}
-          className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white font-bold uppercase text-sm transition-colors"
-          style={{ borderRadius: '0px' }}
-        >
-          ← Back
-        </button>
+        <div className="flex gap-2 flex-wrap justify-end">
+          <button
+            onClick={handleSaveChanges}
+            disabled={isSaving || Object.keys(editedFields).length === 0}
+            className={`px-4 py-2 font-bold uppercase text-sm transition-colors ${
+              isSaving
+                ? 'bg-yellow-600 text-white opacity-75 cursor-wait'
+                : hasUnsavedChanges
+                ? 'bg-green-600 hover:bg-green-700 text-white animate-pulse'
+                : 'bg-slate-600 text-slate-300 cursor-default'
+            }`}
+            style={{ borderRadius: '0px' }}
+          >
+            {isSaving ? '💾 Saving...' : hasUnsavedChanges ? '💾 Save Changes' : '✓ All Saved'}
+          </button>
+          <button
+            onClick={onBack}
+            className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white font-bold uppercase text-sm transition-colors"
+            style={{ borderRadius: '0px' }}
+          >
+            ← Back
+          </button>
+        </div>
       </div>
 
       {error && (
@@ -288,6 +429,37 @@ ${companyResearch?.hiring_focus || 'N/A'}`
           {error}
         </div>
       )}
+
+      {/* Upload Markdown Research Section */}
+      <div className="bg-slate-800/50 border-2 border-dashed border-slate-700 p-6 rounded">
+        <h3 className="text-white font-bold mb-2">📄 Upload Company Research</h3>
+        <p className="text-slate-400 text-sm mb-4">
+          Have research from Claude, ChatGPT, or Gemini? Upload the markdown file here.
+        </p>
+
+        <label className="block">
+          <input
+            type="file"
+            ref={fileInputRef}
+            accept=".md"
+            onChange={handleFileUpload}
+            disabled={uploadLoading}
+            className="hidden"
+          />
+          <button
+            onClick={() => fileInputRef.current?.click()}
+            disabled={uploadLoading}
+            className="w-full px-4 py-3 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-800 disabled:opacity-50 text-white font-bold uppercase text-sm transition-colors"
+            style={{ borderRadius: '0px' }}
+          >
+            {uploadLoading ? '⟳ Uploading...' : '📤 Select .md File'}
+          </button>
+        </label>
+
+        <p className="text-xs text-slate-500 mt-3">
+          💡 <button onClick={() => setShowPromptModal(true)} className="text-blue-400 hover:underline cursor-pointer">Use the prompt template</button> with Claude, ChatGPT, or Gemini to research the company
+        </p>
+      </div>
 
       {/* Loading State */}
       {researching && (
@@ -298,37 +470,60 @@ ${companyResearch?.hiring_focus || 'N/A'}`
         </div>
       )}
 
-      {/* URL Input */}
-      <div className="bg-slate-800/50 border border-slate-700 p-4">
-        <label className="block text-xs font-bold text-slate-400 mb-2 uppercase" style={{ letterSpacing: '0.5px' }}>
-          Company Website (Optional)
-        </label>
-        <div className="flex gap-2">
+      {/* URL Inputs */}
+      <div className="space-y-3">
+        {/* Company Website */}
+        <div className="bg-slate-800/50 border border-slate-700 p-4">
+          <label className="block text-xs font-bold text-slate-400 mb-2 uppercase" style={{ letterSpacing: '0.5px' }}>
+            Company Website (Optional)
+          </label>
+          <div className="flex gap-2">
+            <input
+              type="text"
+              value={companyWebsite}
+              onChange={e => setCompanyWebsite(e.target.value)}
+              placeholder="google.com or https://example.com"
+              disabled={researching}
+              className="flex-1 px-3 py-2 bg-slate-900 border border-slate-600 text-white text-sm placeholder-slate-500 focus:border-blue-500 focus:outline-none disabled:opacity-50"
+              style={{ borderRadius: '0px' }}
+            />
+            <button
+              onClick={handleResearch}
+              disabled={researching}
+              className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold uppercase text-xs transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              style={{ borderRadius: '0px' }}
+            >
+              {researching ? '⟳' : '🔍'}
+            </button>
+          </div>
+          {companyResearch && !researching && (
+            <p className="text-xs text-slate-500 mt-2">
+              {companyResearch.web_crawled
+                ? '🤖 Researched via AI + Website Content'
+                : '🤖 Researched via AI Knowledge'}
+            </p>
+          )}
+        </div>
+
+        {/* Job Posting URL */}
+        <div className="bg-slate-800/50 border border-slate-700 p-4">
+          <label className="block text-xs font-bold text-slate-400 mb-2 uppercase" style={{ letterSpacing: '0.5px' }}>
+            Job Posting URL (Optional)
+          </label>
           <input
             type="text"
-            value={companyWebsite}
-            onChange={e => setCompanyWebsite(e.target.value)}
-            placeholder="google.com or https://example.com"
-            disabled={researching}
-            className="flex-1 px-3 py-2 bg-slate-900 border border-slate-600 text-white text-sm placeholder-slate-500 focus:border-blue-500 focus:outline-none disabled:opacity-50"
+            value={application.job_url || ''}
+            disabled
+            placeholder="Job posting URL"
+            className="w-full px-3 py-2 bg-slate-900 border border-slate-600 text-slate-400 text-sm placeholder-slate-600 focus:outline-none opacity-50 cursor-default"
             style={{ borderRadius: '0px' }}
           />
-          <button
-            onClick={handleResearch}
-            disabled={researching}
-            className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold uppercase text-xs transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-            style={{ borderRadius: '0px' }}
-          >
-            {researching ? '⟳' : '🔍'}
-          </button>
+          {application.job_url && (
+            <a href={application.job_url} target="_blank" rel="noopener noreferrer" className="text-blue-400 text-xs hover:text-blue-300 mt-2 inline-block">
+              🔗 Open Job Posting
+            </a>
+          )}
         </div>
-        {companyResearch && !researching && (
-          <p className="text-xs text-slate-500 mt-2">
-            {companyResearch.web_crawled
-              ? '🤖 Researched via Gemini + Website Content'
-              : '🤖 Researched via Gemini Knowledge'}
-          </p>
-        )}
       </div>
 
       {/* Research Section */}
@@ -412,7 +607,10 @@ ${companyResearch?.hiring_focus || 'N/A'}`
                       isEmpty={isEmpty}
                       isEditing={isEditing && isEmpty}
                       fieldValue={editedFields[tile.fieldKey] || ''}
-                      onFieldChange={e => setEditedFields({...editedFields, [tile.fieldKey]: e.target.value})}
+                      onFieldChange={e => {
+                        setEditedFields({...editedFields, [tile.fieldKey]: e.target.value})
+                        setHasUnsavedChanges(true)
+                      }}
                       onEdit={() => console.log(`Saved ${tile.fieldKey}:`, editedFields[tile.fieldKey])}
                       isFromFallback={isFromFallback(tile.fieldKey)}
                       isError={false}
@@ -484,6 +682,52 @@ ${companyResearch?.hiring_focus || 'N/A'}`
           )}
         </div>
       )}
+
+      {/* People Met Section */}
+      <div className="border-t border-slate-700 pt-6 mt-6">
+        <h3 className="font-bold text-white uppercase text-sm mb-3" style={{ letterSpacing: '0.5px' }}>
+          👥 People Met
+        </h3>
+
+        {prep?.people_met && Array.isArray(JSON.parse(typeof prep.people_met === 'string' ? prep.people_met : JSON.stringify(prep.people_met))) && (
+          <div className="space-y-2 mb-4">
+            {JSON.parse(typeof prep.people_met === 'string' ? prep.people_met : JSON.stringify(prep.people_met)).map((person, i) => (
+              <div key={i} className="bg-slate-800/50 border border-slate-700 p-3 space-y-1">
+                <p className="font-bold text-white text-sm">{person.name}</p>
+                {person.linkedin && (
+                  <a href={person.linkedin} target="_blank" rel="noopener noreferrer" className="text-blue-400 text-xs hover:text-blue-300 break-all">
+                    🔗 {person.linkedin}
+                  </a>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+
+        <button
+          onClick={() => {
+            const name = prompt('Enter person\'s name:')
+            if (!name) return
+            const linkedin = prompt('Enter LinkedIn URL (optional):')
+
+            const peopleMet = prep?.people_met
+              ? JSON.parse(typeof prep.people_met === 'string' ? prep.people_met : JSON.stringify(prep.people_met))
+              : []
+
+            peopleMet.push({ name, linkedin: linkedin || null })
+
+            setEditedFields(prev => ({
+              ...prev,
+              people_met: JSON.stringify(peopleMet)
+            }))
+            setHasUnsavedChanges(true)
+          }}
+          className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs uppercase transition-colors"
+          style={{ borderRadius: '0px' }}
+        >
+          + Add Person
+        </button>
+      </div>
     </div>
   )
 }

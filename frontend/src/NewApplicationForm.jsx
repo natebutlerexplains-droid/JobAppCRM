@@ -16,6 +16,7 @@ export function NewApplicationForm({ isOpen, onClose, onSuccess }) {
     salary_negotiation_target: '',
     work_arrangement: '',
     work_arrangement_notes: '',
+    job_location: '',
     notes: '',
     is_staffing: false,
     staffing_company_name: '',
@@ -50,6 +51,7 @@ export function NewApplicationForm({ isOpen, onClose, onSuccess }) {
         salary_negotiation_target: formData.salary_negotiation_target ? parseFloat(formData.salary_negotiation_target) : null,
         work_arrangement: formData.work_arrangement || null,
         work_arrangement_notes: formData.work_arrangement_notes || null,
+        job_location: formData.job_location || null,
         notes: formData.notes || null,
         is_staffing: formData.is_staffing || false,
         staffing_company_name: formData.staffing_company_name || null,
@@ -59,7 +61,7 @@ export function NewApplicationForm({ isOpen, onClose, onSuccess }) {
         company_name: '', job_title: '', date_submitted: new Date().toISOString().split('T')[0],
         job_url: '', company_website: '', employment_type: '', pay_type: '',
         salary_min: '', salary_max: '', salary_negotiation_target: '',
-        work_arrangement: '', work_arrangement_notes: '', notes: '',
+        work_arrangement: '', work_arrangement_notes: '', job_location: '', notes: '',
         is_staffing: false, staffing_company_name: '', end_client_name: '',
       })
       if (onSuccess) onSuccess(response.data)
@@ -79,7 +81,7 @@ export function NewApplicationForm({ isOpen, onClose, onSuccess }) {
     <>
       <div className="fixed inset-0 bg-black/60 z-40" onClick={onClose} />
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-        <div className="bg-slate-900 border border-slate-700 max-w-lg w-full max-h-[90vh] overflow-y-auto" style={{ borderRadius: '0px' }}>
+        <div className="bg-slate-900 border border-slate-700 max-w-lg w-full max-h-[90vh] overflow-y-auto" style={{ borderRadius: '8px' }}>
 
           {/* Header */}
           <div className="sticky top-0 bg-slate-900 border-b border-slate-700 px-6 py-5 flex justify-between items-center">
@@ -97,7 +99,7 @@ export function NewApplicationForm({ isOpen, onClose, onSuccess }) {
               <div>
                 <label className="block text-xs font-bold text-slate-400 mb-1.5 uppercase">Company Name *</label>
                 <input type="text" value={formData.company_name} onChange={set('company_name')}
-                  placeholder="e.g., Acme Corp" className={inputClass} style={{ borderRadius: '0px' }} />
+                  placeholder="e.g., Acme Corp" className={inputClass} style={{ borderRadius: '4px' }} />
               </div>
               <div>
                 <label className="block text-xs font-bold text-slate-400 mb-1.5 uppercase">Job Title *</label>
@@ -107,7 +109,7 @@ export function NewApplicationForm({ isOpen, onClose, onSuccess }) {
               <div>
                 <label className="block text-xs font-bold text-slate-400 mb-1.5 uppercase">Date Applied *</label>
                 <input type="date" value={formData.date_submitted} onChange={set('date_submitted')}
-                  className={inputClass} style={{ borderRadius: '0px' }} />
+                  className={inputClass} style={{ borderRadius: '4px' }} />
               </div>
               <div>
                 <label className="block text-xs font-bold text-slate-400 mb-1.5 uppercase">Job URL <span className="text-slate-600 normal-case font-normal">(optional)</span></label>
@@ -127,13 +129,20 @@ export function NewApplicationForm({ isOpen, onClose, onSuccess }) {
                 <div className="col-span-2">
                   <label className="block text-xs font-bold text-slate-400 mb-1.5 uppercase">Type</label>
                   <select value={formData.work_arrangement} onChange={set('work_arrangement')}
-                    className={inputClass} style={{ borderRadius: '0px' }}>
+                    className={inputClass} style={{ borderRadius: '4px' }}>
                     <option value="">Not set</option>
                     <option value="Remote">Remote</option>
                     <option value="Hybrid">Hybrid</option>
                     <option value="On-Site">On-Site</option>
                   </select>
                 </div>
+                {(formData.work_arrangement === 'Hybrid' || formData.work_arrangement === 'On-Site') && (
+                  <div className="col-span-2">
+                    <label className="block text-xs font-bold text-slate-400 mb-1.5 uppercase">Location</label>
+                    <input type="text" value={formData.job_location} onChange={set('job_location')}
+                      placeholder="e.g., Denver, CO or 123 Main St, Boston, MA" className={inputClass} style={{ borderRadius: '0px' }} />
+                  </div>
+                )}
                 {formData.work_arrangement === 'Hybrid' && (
                   <div className="col-span-2">
                     <label className="block text-xs font-bold text-slate-400 mb-1.5 uppercase">Details <span className="text-slate-600 normal-case font-normal">(e.g., "3 days office/2 remote")</span></label>
@@ -151,7 +160,7 @@ export function NewApplicationForm({ isOpen, onClose, onSuccess }) {
                 <div>
                   <label className="block text-xs font-bold text-slate-400 mb-1.5 uppercase">Employment Type</label>
                   <select value={formData.employment_type} onChange={set('employment_type')}
-                    className={inputClass} style={{ borderRadius: '0px' }}>
+                    className={inputClass} style={{ borderRadius: '4px' }}>
                     <option value="">Not set</option>
                     <option value="W2">W2</option>
                     <option value="1099">1099</option>
@@ -161,7 +170,7 @@ export function NewApplicationForm({ isOpen, onClose, onSuccess }) {
                 <div>
                   <label className="block text-xs font-bold text-slate-400 mb-1.5 uppercase">Pay Type</label>
                   <select value={formData.pay_type} onChange={set('pay_type')}
-                    className={inputClass} style={{ borderRadius: '0px' }}>
+                    className={inputClass} style={{ borderRadius: '4px' }}>
                     <option value="">Not set</option>
                     <option value="Salary">Salary</option>
                     <option value="Hourly">Hourly</option>
@@ -236,11 +245,11 @@ export function NewApplicationForm({ isOpen, onClose, onSuccess }) {
 
             <div className="flex gap-3 pt-2">
               <button type="submit" disabled={loading}
-                className="flex-1 px-4 py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold uppercase text-sm transition-colors disabled:opacity-50" style={{ borderRadius: '0px' }}>
+                className="flex-1 px-4 py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold uppercase text-sm transition-colors disabled:opacity-50" style={{ borderRadius: '4px' }}>
                 {loading ? 'Creating...' : '+ Add Application'}
               </button>
               <button type="button" onClick={onClose}
-                className="px-4 py-3 bg-slate-700 hover:bg-slate-600 text-white font-bold uppercase text-sm transition-colors" style={{ borderRadius: '0px' }}>
+                className="px-4 py-3 bg-slate-700 hover:bg-slate-600 text-white font-bold uppercase text-sm transition-colors" style={{ borderRadius: '4px' }}>
                 Cancel
               </button>
             </div>

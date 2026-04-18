@@ -194,6 +194,21 @@ class Database:
         except Exception:
             pass
 
+        try:
+            cursor.execute("ALTER TABLE applications ADD COLUMN order_position INTEGER DEFAULT 0")
+        except Exception:
+            pass
+
+        try:
+            cursor.execute("ALTER TABLE applications ADD COLUMN job_location TEXT")
+        except Exception:
+            pass
+
+        try:
+            cursor.execute("ALTER TABLE interview_prep ADD COLUMN people_met TEXT")
+        except Exception:
+            pass
+
         self.connection.commit()
 
     def _sync_logs_allows_cancelled(self) -> bool:
@@ -284,7 +299,7 @@ class Application:
     @staticmethod
     def get_all(db: Database) -> List[Dict[str, Any]]:
         """Get all applications."""
-        cursor = db.execute("SELECT * FROM applications ORDER BY date_submitted DESC")
+        cursor = db.execute("SELECT * FROM applications ORDER BY status, order_position ASC, date_submitted DESC")
         return [dict(row) for row in cursor.fetchall()]
 
     @staticmethod
@@ -299,7 +314,7 @@ class Application:
     @staticmethod
     def update(db: Database, app_id: int, fields: Dict[str, Any]):
         """Update application with whitelisted fields."""
-        ALLOWED = {'company_name', 'job_title', 'job_url', 'notes', 'salary_min', 'salary_max', 'salary_negotiation_target', 'status', 'company_domain'}
+        ALLOWED = {'company_name', 'job_title', 'job_url', 'notes', 'salary_min', 'salary_max', 'salary_negotiation_target', 'status', 'company_domain', 'order_position', 'job_location'}
 
         # Filter to allowed fields only
         updates = {k: v for k, v in fields.items() if k in ALLOWED}
@@ -650,13 +665,7 @@ class ClassificationFeedback:
         (not all-time count which barely moves with 2000+ emails).
         Training examples count is all-time total.
         """
-        # 30-day window for accuracy (recent classifications only)
-        recent_classified = db.execute(
-            """SELECT COUNT(*) as cnt FROM emails
-               WHERE gemini_classification IS NOT NULL
-               AND date_received >= datetime('now', '-30 days')"""
-        ).fetchone()["cnt"]
-
+        # 30-day window for accuracy (recent corrections only)
         recent_corrected = db.execute(
             """SELECT COUNT(*) as cnt FROM classification_feedback
                WHERE created_at >= datetime('now', '-30 days')"""
@@ -675,18 +684,15 @@ class ClassificationFeedback:
         ).fetchall()
         by_target = {row["corrected_category"]: row["cnt"] for row in by_target_rows}
 
-        # Calculate accuracy using 30-day window so gauge fluctuates meaningfully
-        if recent_classified > 0:
-            accuracy_score = round(
-                ((recent_classified - recent_corrected) / recent_classified) * 100,
-                1
-            )
-        else:
-            accuracy_score = 100.0
+        # Accuracy based on corrections (no per-email classification storage after Claude migration)
+        accuracy_score = 100.0 if total_training_examples == 0 else round(
+            (max(0, total_training_examples - recent_corrected) / total_training_examples) * 100,
+            1
+        )
 
         return {
-            "total_classified": recent_classified,  # 30-day window
-            "total_corrected": recent_corrected,  # 30-day window
+            "total_classified": total_training_examples,
+            "total_corrected": recent_corrected,  # 30-day corrections
             "training_examples": total_training_examples,  # all-time
             "accuracy_score": accuracy_score,
             "by_target": by_target,
