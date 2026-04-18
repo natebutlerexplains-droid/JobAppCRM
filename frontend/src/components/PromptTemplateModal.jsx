@@ -87,9 +87,9 @@ CRITICAL RULES:
               <li>Copy this prompt (click "Copy All" button below)</li>
               <li>Paste into Claude, ChatGPT, or Gemini</li>
               <li>Replace <code className="bg-blue-900/50 px-1">{"{COMPANY_WEBSITE_URL}"}</code> with actual company website</li>
-              <li>Send to LLM</li>
-              <li>Copy the markdown response (starts with ## Company Overview)</li>
-              <li>Save as .md file and upload to this app</li>
+              <li>Send to LLM and request it save the response as a .md file (final deliverable)</li>
+              <li>Download the .md file from your LLM</li>
+              <li>Upload the file to this app using the "📤 Select .md File" button</li>
             </ol>
           </div>
 
