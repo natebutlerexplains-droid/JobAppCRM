@@ -555,32 +555,14 @@ ${companyResearch?.hiring_focus || 'N/A'}`
           <label className="block text-xs font-bold text-slate-400 mb-2 uppercase" style={{ letterSpacing: '0.5px' }}>
             Company Website (Optional)
           </label>
-          <div className="flex gap-2">
-            <input
-              type="text"
-              value={companyWebsite}
-              onChange={e => setCompanyWebsite(e.target.value)}
-              placeholder="google.com or https://example.com"
-              disabled={researching}
-              className="flex-1 px-3 py-2 bg-slate-900 border border-slate-600 text-white text-sm placeholder-slate-500 focus:border-blue-500 focus:outline-none disabled:opacity-50"
-              style={{ borderRadius: '0px' }}
-            />
-            <button
-              onClick={handleResearch}
-              disabled={researching}
-              className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold uppercase text-xs transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-              style={{ borderRadius: '0px' }}
-            >
-              {researching ? '⟳' : '🔍'}
-            </button>
-          </div>
-          {companyResearch && !researching && (
-            <p className="text-xs text-slate-500 mt-2">
-              {companyResearch.web_crawled
-                ? '🤖 Researched via AI + Website Content'
-                : '🤖 Researched via AI Knowledge'}
-            </p>
-          )}
+          <input
+            type="text"
+            value={companyWebsite}
+            onChange={e => setCompanyWebsite(e.target.value)}
+            placeholder="google.com or https://example.com"
+            className="w-full px-3 py-2 bg-slate-900 border border-slate-600 text-white text-sm placeholder-slate-500 focus:border-blue-500 focus:outline-none"
+            style={{ borderRadius: '0px' }}
+          />
         </div>
 
         {/* Job Posting URL */}
@@ -591,9 +573,9 @@ ${companyResearch?.hiring_focus || 'N/A'}`
           <input
             type="text"
             value={application.job_url || ''}
-            disabled
-            placeholder="Job posting URL"
-            className="w-full px-3 py-2 bg-slate-900 border border-slate-600 text-slate-400 text-sm placeholder-slate-600 focus:outline-none opacity-50 cursor-default"
+            readOnly
+            placeholder="Job posting URL from application"
+            className="w-full px-3 py-2 bg-slate-900 border border-slate-600 text-slate-300 text-sm placeholder-slate-500 focus:outline-none"
             style={{ borderRadius: '0px' }}
           />
           {application.job_url && (
