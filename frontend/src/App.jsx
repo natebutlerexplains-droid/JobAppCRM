@@ -171,11 +171,10 @@ function App() {
                   application={interviewPrepApp}
                   onBack={() => {
                     setInterviewPrepApp(null)
-                    setCurrentPage('dashboard')
                   }}
                 />
               ) : (
-                <InterviewPrepHistory />
+                <InterviewPrepHistory onSelectApp={handleNavToInterview} />
               )}
             </>
           )}
