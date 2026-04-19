@@ -14,11 +14,20 @@
     ],
     "headers": [
       {
-        "source": "**",
+        "source": "/index.html",
         "headers": [
           {
             "key": "Cache-Control",
-            "value": "max-age=3600"
+            "value": "no-cache"
+          }
+        ]
+      },
+      {
+        "source": "/assets/**",
+        "headers": [
+          {
+            "key": "Cache-Control",
+            "value": "max-age=31536000, immutable"
           }
         ]
       }

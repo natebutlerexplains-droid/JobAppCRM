@@ -172,7 +172,7 @@ function App() {
             </button>
 
             {/* Navigation - Center */}
-            <div className="flex gap-8">
+            <div className="flex gap-12 justify-center">
               <button
                 onClick={() => setCurrentPage('dashboard')}
                 className={`font-bold uppercase text-sm tracking-widest transition-colors pb-2 border-b-2 ${

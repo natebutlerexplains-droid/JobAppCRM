@@ -260,7 +260,7 @@ export function KanbanBoard({ applications, onCardClick, onApplicationsChange, o
 
       <DndContext sensors={sensors} collisionDetection={closestCenter} onDragStart={handleDragStart} onDragOver={handleDragOver} onDragEnd={handleDragEnd}>
         <div className="overflow-x-auto -mx-4 px-4 sm:mx-0 sm:px-0">
-          <div className="grid grid-cols-5 gap-6 pb-4 min-w-[900px] sm:min-w-0 sm:w-full">
+          <div className="grid grid-cols-5 gap-6 pb-4 min-w-[1200px] sm:min-w-0 sm:w-full">
           {COLUMNS.map(column => (
             <KanbanColumn
               key={column.id}
