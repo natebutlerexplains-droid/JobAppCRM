@@ -20,7 +20,7 @@ export function ApplicationCard({ application, hasSuggestion, onClick, onDelete,
 
   const isHourly = application.pay_type === 'Hourly'
 
-  // Check if 48 hours have passed since submission and app is not in interview stage
+  // Check if threshold hours have passed since submission and app is not in interview stage
   const getFollowUpIndicator = () => {
     if (application.status === 'Interview Started' || application.status === 'Denied' || application.status === 'Offered' || application.status === 'Archived') {
       return null
@@ -28,7 +28,9 @@ export function ApplicationCard({ application, hasSuggestion, onClick, onDelete,
     const submittedDate = new Date(application.date_submitted)
     const now = new Date()
     const hoursPassed = (now - submittedDate) / (1000 * 60 * 60)
-    return hoursPassed >= 48
+    const settings = JSON.parse(localStorage.getItem('app_settings')) || {}
+    const threshold = settings.followUpThresholdHours || 48
+    return hoursPassed >= threshold
   }
 
   const showFollowUp = getFollowUpIndicator()

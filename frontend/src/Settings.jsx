@@ -4,24 +4,22 @@ import api from './api'
 const SETTINGS_KEY = 'app_settings'
 
 const defaultSettings = {
-  defaultSalaryMin: 80000,
-  defaultSalaryMax: 150000,
   autoArchiveAfterDays: 90,
-  enableNotifications: true,
-  darkMode: true,
-  compactView: false,
-  showArchivedByDefault: false,
+  followUpThresholdHours: 48,
 }
 
 export function Settings() {
   const [settings, setSettings] = useState(defaultSettings)
   const [saved, setSaved] = useState(false)
+  const [syncSchedule, setSyncSchedule] = useState(null)
+  const [syncScheduleLoading, setSyncScheduleLoading] = useState(true)
+  const [syncError, setSyncError] = useState(null)
   const [geminiStatus, setGeminiStatus] = useState(null)
   const [geminiError, setGeminiError] = useState(null)
   const [geminiLoading, setGeminiLoading] = useState(true)
 
   useEffect(() => {
-    // Load saved settings
+    // Load saved settings from localStorage
     const saved = localStorage.getItem(SETTINGS_KEY)
     if (saved) {
       setSettings(JSON.parse(saved))
@@ -29,7 +27,26 @@ export function Settings() {
   }, [])
 
   useEffect(() => {
-    // Fetch Gemini API key status
+    // Fetch sync schedule from backend
+    const fetchSyncSchedule = async () => {
+      try {
+        setSyncScheduleLoading(true)
+        const response = await api.get('/settings/sync-schedule')
+        setSyncSchedule(response.data)
+        setSyncError(null)
+      } catch (error) {
+        console.error('Failed to fetch sync schedule:', error)
+        setSyncError('Unable to fetch sync schedule')
+      } finally {
+        setSyncScheduleLoading(false)
+      }
+    }
+
+    fetchSyncSchedule()
+  }, [])
+
+  useEffect(() => {
+    // Fetch Claude API status
     const fetchGeminiStatus = async () => {
       try {
         setGeminiLoading(true)
@@ -37,7 +54,7 @@ export function Settings() {
         setGeminiStatus(response.data)
         setGeminiError(null)
       } catch (error) {
-        console.error('Failed to fetch Gemini key status:', error)
+        console.error('Failed to fetch Claude API status:', error)
         setGeminiError('Unable to fetch API key status')
       } finally {
         setGeminiLoading(false)
@@ -56,6 +73,17 @@ export function Settings() {
     setTimeout(() => setSaved(false), 2000)
   }
 
+  const handleSyncScheduleChange = async (newSchedule) => {
+    try {
+      await api.post('/settings/sync-schedule', { schedule: newSchedule })
+      setSyncSchedule({ ...syncSchedule, schedule: newSchedule })
+      setSyncError(null)
+    } catch (error) {
+      console.error('Failed to update sync schedule:', error)
+      setSyncError('Failed to save sync schedule')
+    }
+  }
+
   const handleReset = () => {
     if (window.confirm('Reset all settings to defaults?')) {
       setSettings(defaultSettings)
@@ -71,7 +99,7 @@ export function Settings() {
         <h2 className="text-3xl font-black uppercase text-white" style={{ letterSpacing: '1px' }}>
           Settings
         </h2>
-        <p className="text-slate-400 text-sm mt-2">Configure app preferences and defaults</p>
+        <p className="text-slate-400 text-sm mt-2">Configure app preferences</p>
       </div>
 
       {saved && (
@@ -80,23 +108,11 @@ export function Settings() {
         </div>
       )}
 
-      {/* Archive Settings */}
-      <div className="bg-slate-800/50 border border-slate-700 p-6 space-y-4" style={{ borderRadius: '0px' }}>
+      {/* Archive & Follow-up Settings */}
+      <div className="bg-slate-800/50 border border-slate-700 p-6 space-y-6" style={{ borderRadius: '8px' }}>
         <h3 className="font-bold text-white uppercase text-sm" style={{ letterSpacing: '0.5px' }}>
-          📦 Archive Preferences
+          📋 Application Preferences
         </h3>
-
-        <div>
-          <label className="flex items-center gap-3 cursor-pointer">
-            <input
-              type="checkbox"
-              checked={settings.showArchivedByDefault || false}
-              onChange={(e) => setSettings({...settings, showArchivedByDefault: e.target.checked})}
-              className="w-5 h-5"
-            />
-            <span className="text-slate-300">Show archived section expanded by default</span>
-          </label>
-        </div>
 
         <div>
           <label className="block text-sm font-bold text-slate-300 mb-2">
@@ -112,47 +128,74 @@ export function Settings() {
             className="w-full"
           />
           <p className="text-xs text-slate-500 mt-2">
-            Set to 365 to disable auto-archiving
+            Applications automatically move to archive after this many days with no status change
+          </p>
+        </div>
+
+        <div>
+          <label className="block text-sm font-bold text-slate-300 mb-2">
+            Follow-up nudge appears after (hours): {settings.followUpThresholdHours}
+          </label>
+          <input
+            type="range"
+            min="24"
+            max="120"
+            step="6"
+            value={settings.followUpThresholdHours || 48}
+            onChange={(e) => setSettings({...settings, followUpThresholdHours: parseInt(e.target.value)})}
+            className="w-full"
+          />
+          <p className="text-xs text-slate-500 mt-2">
+            Dashboard cards show ⏰ Follow-up badge after this many hours since applying (if status unchanged)
           </p>
         </div>
       </div>
 
-      {/* Display Settings */}
-      <div className="bg-slate-800/50 border border-slate-700 p-6 space-y-4" style={{ borderRadius: '0px' }}>
+      {/* Email Sync Schedule */}
+      <div className="bg-slate-800/50 border border-slate-700 p-6 space-y-4" style={{ borderRadius: '8px' }}>
         <h3 className="font-bold text-white uppercase text-sm" style={{ letterSpacing: '0.5px' }}>
-          🎨 Display
+          📧 Email Sync Schedule
         </h3>
 
-        <div>
-          <label className="flex items-center gap-3 cursor-pointer">
-            <input
-              type="checkbox"
-              checked={settings.compactView || false}
-              onChange={(e) => setSettings({...settings, compactView: e.target.checked})}
-              className="w-5 h-5"
-            />
-            <span className="text-slate-300">Compact card view</span>
-          </label>
-        </div>
+        {syncError && (
+          <div className="bg-yellow-900/30 border border-yellow-700 text-yellow-300 p-3 text-sm">
+            ⚠️ {syncError}
+          </div>
+        )}
 
-        <div>
-          <label className="flex items-center gap-3 cursor-pointer">
-            <input
-              type="checkbox"
-              checked={settings.darkMode !== false}
-              onChange={(e) => setSettings({...settings, darkMode: e.target.checked})}
-              className="w-5 h-5"
-              disabled
-            />
-            <span className="text-slate-300">Dark mode (always enabled)</span>
-          </label>
-        </div>
+        {syncScheduleLoading ? (
+          <p className="text-slate-400 text-sm">Loading sync schedule...</p>
+        ) : (
+          <div>
+            <label className="block text-sm font-bold text-slate-300 mb-2">
+              Sync frequency
+            </label>
+            <select
+              value={syncSchedule?.schedule || 'daily'}
+              onChange={(e) => handleSyncScheduleChange(e.target.value)}
+              className="w-full px-3 py-2 bg-slate-900 border border-slate-600 text-white text-sm focus:border-blue-500 focus:outline-none"
+              style={{ borderRadius: '4px' }}
+            >
+              <option value="daily">Daily (2:00 AM)</option>
+              <option value="every_4_hours">Every 4 hours</option>
+              <option value="manual_only">Manual only</option>
+            </select>
+            <p className="text-xs text-slate-500 mt-2">
+              When and how often to check email for new job postings
+            </p>
+            {syncSchedule?.next_sync_time && (
+              <p className="text-xs text-slate-400 mt-2">
+                Next sync: {new Date(syncSchedule.next_sync_time).toLocaleString()}
+              </p>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Claude API Configuration */}
-      <div className="bg-slate-800/50 border border-slate-700 p-6 space-y-4" style={{ borderRadius: '0px' }}>
+      <div className="bg-slate-800/50 border border-slate-700 p-6 space-y-4" style={{ borderRadius: '8px' }}>
         <h3 className="font-bold text-white uppercase text-sm" style={{ letterSpacing: '0.5px' }}>
-          🤖 Claude API Configuration
+          🤖 Claude API
         </h3>
 
         {geminiLoading && (
@@ -169,9 +212,6 @@ export function Settings() {
           <div className="space-y-3">
             <div className="bg-slate-700/50 p-3 rounded border border-slate-600">
               <div className="text-sm text-slate-300 mb-2">
-                <span className="font-bold">API:</span> {geminiStatus.api || 'Claude'}
-              </div>
-              <div className="text-sm text-slate-300 mb-2">
                 <span className="font-bold">Model:</span> {geminiStatus.model || 'claude-3-5-sonnet-20241022'}
               </div>
               <div className="text-sm text-slate-300 mb-2">
@@ -183,53 +223,22 @@ export function Settings() {
             </div>
 
             <p className="text-xs text-slate-400">
-              ✓ Claude API provides superior performance with no quota rotation needed. Research requests are reliable and fast.
-            </p>
-
-            <p className="text-xs text-slate-500">
-              To configure, add <code className="bg-slate-900 px-2 py-1 rounded text-xs text-slate-200">CLAUDE_API_KEY</code> to your{' '}
-              <code className="bg-slate-900 px-2 py-1 rounded text-xs text-slate-200">.env</code> file. Get a free key at{' '}
-              <a href="https://console.anthropic.com" target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:text-blue-300">
-                console.anthropic.com
-              </a>
+              Claude API is used for company research, interview question generation, and email classification. Configure your API key in <code className="bg-slate-900 px-2 py-1 rounded text-xs text-slate-200">.env</code>
             </p>
           </div>
         )}
       </div>
 
-      {/* Notifications */}
-      <div className="bg-slate-800/50 border border-slate-700 p-6 space-y-4" style={{ borderRadius: '0px' }}>
-        <h3 className="font-bold text-white uppercase text-sm" style={{ letterSpacing: '0.5px' }}>
-          🔔 Notifications
-        </h3>
-
-        <div>
-          <label className="flex items-center gap-3 cursor-pointer">
-            <input
-              type="checkbox"
-              checked={settings.enableNotifications !== false}
-              onChange={(e) => setSettings({...settings, enableNotifications: e.target.checked})}
-              className="w-5 h-5"
-            />
-            <span className="text-slate-300">Enable browser notifications</span>
-          </label>
-        </div>
-
-        <p className="text-xs text-slate-500">
-          Receive notifications for upcoming interviews and follow-ups
-        </p>
-      </div>
-
       {/* Data Info */}
-      <div className="bg-slate-800/50 border border-slate-700 p-6 space-y-3" style={{ borderRadius: '0px' }}>
+      <div className="bg-slate-800/50 border border-slate-700 p-6 space-y-3" style={{ borderRadius: '8px' }}>
         <h3 className="font-bold text-white uppercase text-sm" style={{ letterSpacing: '0.5px' }}>
-          💾 Data
+          💾 Your Data
         </h3>
         <p className="text-slate-400 text-sm">
           All data is stored locally on your computer in <code className="bg-slate-900 px-2 py-1 rounded text-xs text-slate-200">jobs.db</code>
         </p>
         <p className="text-xs text-slate-500">
-          No cloud services. Your data is yours alone.
+          No cloud storage. Zero data sharing. Your data is yours alone.
         </p>
       </div>
 
@@ -238,16 +247,16 @@ export function Settings() {
         <button
           onClick={handleSave}
           className="flex-1 px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold uppercase transition-colors"
-          style={{ borderRadius: '0px' }}
+          style={{ borderRadius: '4px' }}
         >
           ✓ Save Settings
         </button>
         <button
           onClick={handleReset}
           className="flex-1 px-6 py-3 bg-slate-700 hover:bg-slate-600 text-white font-bold uppercase transition-colors"
-          style={{ borderRadius: '0px' }}
+          style={{ borderRadius: '4px' }}
         >
-          ↻ Reset to Defaults
+          ↻ Reset
         </button>
       </div>
     </div>
