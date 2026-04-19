@@ -103,10 +103,10 @@ function App() {
             {/* Logo - Left (absolute) */}
             <button
               onClick={() => setCurrentPage('dashboard')}
-              className="absolute left-0 text-3xl font-black uppercase tracking-tight text-white hover:text-blue-400 transition-colors cursor-pointer"
+              className="absolute left-0 text-3xl font-black uppercase tracking-tight hover:opacity-80 transition-opacity cursor-pointer"
               style={{ letterSpacing: '2px' }}
             >
-              Job CRM
+              <span style={{ color: '#3b82f6' }}>→</span><span style={{ color: 'white' }}>PIPELINE</span>
             </button>
 
             {/* Navigation - Center */}
