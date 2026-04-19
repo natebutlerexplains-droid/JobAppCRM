@@ -52,13 +52,6 @@ export function ApplicationCard({ application, hasSuggestion, onClick, onDelete,
   const hasJobUrl = !!application.job_url && application.job_url.trim() !== ''
   const canPrep = hasCompanyName && hasJobTitle && hasJobUrl
 
-  const handlePrepClick = (e) => {
-    e.stopPropagation()
-    if (onPrepClick) {
-      onPrepClick(application)
-    }
-  }
-
   return (
     <div
       onClick={onClick}
