@@ -296,7 +296,7 @@ export function KanbanBoard({ applications, onCardClick, onApplicationsChange, o
           {activeId && applications.find(a => a.id === activeId) && (
             <DraggingCardOverlay
               application={applications.find(a => a.id === activeId)}
-              hasSuggestion={suggestions.some(s => s.application_id === activeId)}
+              hasSuggestion={false}
             />
           )}
         </DragOverlay>
