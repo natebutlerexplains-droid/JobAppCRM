@@ -3,12 +3,17 @@ import json
 from datetime import datetime
 from typing import Optional, List, Dict, Any
 import os
+import psycopg2
+from psycopg2 import extras
 
 class Database:
-    def __init__(self, db_path: str):
+    def __init__(self, db_path: str, use_postgres: bool = False, connection_string: str = None):
         self.db_path = db_path
         self.connection = None
-        self._ensure_db_dir()
+        self.use_postgres = use_postgres
+        self.connection_string = connection_string
+        if not use_postgres:
+            self._ensure_db_dir()
         self.init_connection()
 
     def _ensure_db_dir(self):
@@ -17,12 +22,25 @@ class Database:
         os.makedirs(db_dir, exist_ok=True)
 
     def init_connection(self):
-        """Initialize database connection with WAL mode."""
-        self.connection = sqlite3.connect(self.db_path, check_same_thread=False)
-        self.connection.row_factory = sqlite3.Row
-        # Enable WAL mode for concurrent access
-        self.connection.execute("PRAGMA journal_mode=WAL")
-        self.connection.execute("PRAGMA synchronous=NORMAL")
+        """Initialize database connection (SQLite or PostgreSQL)."""
+        if self.use_postgres:
+            try:
+                self.connection = psycopg2.connect(self.connection_string)
+                self.connection.autocommit = False
+            except Exception as e:
+                print(f"Failed to connect to Supabase: {e}")
+                print("Falling back to SQLite...")
+                self.use_postgres = False
+                self._ensure_db_dir()
+                self.connection = sqlite3.connect(self.db_path, check_same_thread=False)
+                self.connection.row_factory = sqlite3.Row
+        else:
+            self.connection = sqlite3.connect(self.db_path, check_same_thread=False)
+            self.connection.row_factory = sqlite3.Row
+            # Enable WAL mode for concurrent access
+            self.connection.execute("PRAGMA journal_mode=WAL")
+            self.connection.execute("PRAGMA synchronous=NORMAL")
+
         self.create_tables()
         self._migrate_sync_logs_status()
 

@@ -14,6 +14,11 @@ load_dotenv()
 class Config:
     # Database
     DATABASE_PATH = os.getenv("DATABASE_PATH", "./jobs.db")
+    USE_POSTGRES = os.getenv("USE_POSTGRES", "true").lower() == "true"
+    SUPABASE_CONNECTION_STRING = os.getenv(
+        "SUPABASE_CONNECTION_STRING",
+        "postgresql://postgres:Semo4735!$!@db.fbrmhmudkzgwbxllbwkd.supabase.co:5432/postgres"
+    )
 
     # Flask settings
     FLASK_ENV = os.getenv("FLASK_ENV", "development")

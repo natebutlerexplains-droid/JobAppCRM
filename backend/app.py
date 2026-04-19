@@ -77,8 +77,12 @@ def add_security_headers(response):
     return response
 
 # Initialize database
-logger.info(f"Initializing database at: {Config.DATABASE_PATH}")
-db = Database(Config.DATABASE_PATH)
+if Config.USE_POSTGRES:
+    logger.info("Initializing Supabase PostgreSQL connection...")
+    db = Database(Config.DATABASE_PATH, use_postgres=True, connection_string=Config.SUPABASE_CONNECTION_STRING)
+else:
+    logger.info(f"Initializing SQLite database at: {Config.DATABASE_PATH}")
+    db = Database(Config.DATABASE_PATH)
 
 # Initialize scheduler
 scheduler = BackgroundScheduler()
