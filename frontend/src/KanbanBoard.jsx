@@ -69,7 +69,7 @@ function KanbanColumn({ column, items, suggestions = [], onCardClick, onDelete, 
 
   return (
     <div className="flex flex-col gap-1 h-[70vh] sm:h-[800px] w-full">
-      <div className="font-black text-xl uppercase pb-2 text-center text-white flex items-center justify-center gap-2" style={{ letterSpacing: '1px' }}>
+      <div className="font-black text-lg uppercase pb-2 text-center text-white flex items-center justify-center gap-2" style={{ letterSpacing: '1px' }}>
         <span>{column.label}</span>
         <span className="text-sm font-normal text-slate-400">{items.length}</span>
       </div>
@@ -260,7 +260,7 @@ export function KanbanBoard({ applications, onCardClick, onApplicationsChange, o
 
       <DndContext sensors={sensors} collisionDetection={closestCenter} onDragStart={handleDragStart} onDragOver={handleDragOver} onDragEnd={handleDragEnd}>
         <div className="overflow-x-auto -mx-4 px-4 sm:mx-0 sm:px-0">
-          <div className="grid grid-cols-5 gap-6 pb-4 min-w-[1200px] sm:min-w-0 sm:w-full">
+          <div className="grid grid-cols-5 gap-6 pb-4 min-w-[1500px] sm:min-w-0 sm:w-full">
           {COLUMNS.map(column => (
             <KanbanColumn
               key={column.id}
