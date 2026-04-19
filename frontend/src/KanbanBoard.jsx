@@ -226,15 +226,11 @@ export function KanbanBoard({ applications, onCardClick, onApplicationsChange, o
 
     // Case 1: Moving to a different column
     if (app.status !== targetColumnId) {
-      setLoading(true)
-      try {
-        await updateApplication(userId, activeAppId, { status: targetColumnId })
-        onApplicationsChange(applications.map(a => a.id === activeAppId ? { ...a, status: targetColumnId } : a))
-      } catch (err) {
+      const updatedApps = applications.map(a => a.id === activeAppId ? { ...a, status: targetColumnId } : a)
+      onApplicationsChange(updatedApps)
+      updateApplication(userId, activeAppId, { status: targetColumnId }).catch(err => {
         setError(`Failed to update: ${err.message}`)
-      } finally {
-        setLoading(false)
-      }
+      })
     }
     // Case 2: Reordering within the same column
     else if (!directColumn && over.id !== activeAppId) {
@@ -249,19 +245,14 @@ export function KanbanBoard({ applications, onCardClick, onApplicationsChange, o
           order_position: idx
         }))
 
-        setLoading(true)
-        try {
-          await reorderApplications(userId, updates)
-          const updated = applications.map(a => {
-            const u = updates.find(up => up.id === a.id)
-            return u ? { ...a, order_position: u.order_position } : a
-          })
-          onApplicationsChange(updated)
-        } catch (err) {
+        const updated = applications.map(a => {
+          const u = updates.find(up => up.id === a.id)
+          return u ? { ...a, order_position: u.order_position } : a
+        })
+        onApplicationsChange(updated)
+        reorderApplications(userId, updates).catch(err => {
           setError(`Failed to reorder: ${err.message}`)
-        } finally {
-          setLoading(false)
-        }
+        })
       }
     }
   }
