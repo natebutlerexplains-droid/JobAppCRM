@@ -39,7 +39,7 @@ export function Login() {
         <div className="bg-slate-900/60 backdrop-blur-xl border border-slate-700/40 rounded-2xl p-8 shadow-2xl">
           {/* Header */}
           <div className="mb-8">
-            <h2 className="text-2xl font-bold text-white mb-2">Sign in</h2>
+            <h2 className="text-2xl font-bold text-white mb-2 text-center">Sign in</h2>
             <p className="text-slate-400 text-sm">Continue with your Google account</p>
           </div>
 
