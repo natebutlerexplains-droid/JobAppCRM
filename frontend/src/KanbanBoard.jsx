@@ -23,9 +23,10 @@ import { updateApplication, deleteApplication, reorderApplications } from './api
 
 const COLUMNS = [
   { id: 'Submitted', label: 'Submitted' },
-  { id: 'Interview Started', label: 'Interview Started' },
-  { id: 'Denied', label: 'Denied' },
-  { id: 'Offered', label: 'Offered' },
+  { id: 'Phone Screening', label: 'Phone Screening' },
+  { id: '1st Round', label: '1st Round' },
+  { id: '2nd Round', label: '2nd Round' },
+  { id: '3rd Round', label: '3rd Round' },
 ]
 
 function SortableCard({ id, application, hasSuggestion, onClick, onDelete, isArchived, onPrepClick }) {
