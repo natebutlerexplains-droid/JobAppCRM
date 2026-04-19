@@ -28,11 +28,9 @@ export function Login() {
 
       <div className="relative w-full max-w-md">
         {/* Logo */}
-        <div className="text-center mb-12">
-          <h1 className="text-5xl font-black uppercase text-white mb-3" style={{ letterSpacing: '3px' }}>
-            <span style={{ color: '#3b82f6' }}>→</span><span>PIPELINE</span>
-          </h1>
-          <p className="text-slate-400 text-sm font-medium tracking-wide">PROFESSIONAL JOB TRACKER</p>
+        <div className="text-center mb-12 flex items-center justify-center gap-3">
+          <span className="text-5xl font-black" style={{ color: '#3b82f6', letterSpacing: '1px' }}>→</span>
+          <h1 className="text-5xl font-black uppercase text-white" style={{ letterSpacing: '3px' }}>PIPELINE</h1>
         </div>
 
         {/* Login Card */}
