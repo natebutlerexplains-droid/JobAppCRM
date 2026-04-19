@@ -1808,7 +1808,7 @@ def validate_required_fields(data, required_fields):
 
 def validate_status(status):
     """Validate application status."""
-    allowed = ["Submitted", "Phone Screening", "1st Round", "2nd Round", "3rd Round"]
+    allowed = ["Submitted", "Phone Screening", "1st Round", "2nd Round", "3rd Round", "Archived"]
     if status not in allowed:
         raise ValueError(f"Invalid status. Must be one of: {', '.join(allowed)}")
 

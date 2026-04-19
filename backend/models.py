@@ -40,7 +40,7 @@ class Database:
             job_url TEXT,
             date_submitted DATE NOT NULL,
             status TEXT NOT NULL DEFAULT 'Submitted'
-                CHECK(status IN ('Submitted', 'Phone Screening', '1st Round', '2nd Round', '3rd Round')),
+                CHECK(status IN ('Submitted', 'Phone Screening', '1st Round', '2nd Round', '3rd Round', 'Archived')),
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
