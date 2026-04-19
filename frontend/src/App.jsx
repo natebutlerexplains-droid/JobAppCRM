@@ -105,10 +105,11 @@ function App() {
             <div className="flex items-center justify-between mb-3">
               <button
                 onClick={() => setCurrentPage('dashboard')}
-                className="text-xl font-black uppercase hover:opacity-80 transition-opacity"
-                style={{ letterSpacing: '1px', color: '#3b82f6' }}
+                className="flex items-center gap-2 text-xl font-black uppercase hover:opacity-80 transition-opacity"
+                style={{ letterSpacing: '1px' }}
               >
-                →
+                <span style={{ color: '#3b82f6' }}>→</span>
+                <span style={{ color: 'white' }}>PIPELINE</span>
               </button>
               <button
                 onClick={logout}
