@@ -125,27 +125,6 @@ export function ApplicationCard({ application, hasSuggestion, onClick, onDelete,
             ⏰ Follow-up
           </span>
         )}
-
-        {/* Prep Button - Only enabled when all core trio fields are filled */}
-        <div className="pt-2">
-          <button
-            onClick={handlePrepClick}
-            disabled={!canPrep}
-            className={`w-full px-3 py-2 text-xs font-medium rounded transition-colors ${
-              canPrep
-                ? 'bg-blue-100 hover:bg-blue-200 text-blue-800 cursor-pointer'
-                : 'bg-gray-100 text-gray-400 cursor-not-allowed'
-            }`}
-            title={!canPrep ? 'Add company, position, and job link to prep' : 'Start interview prep'}
-          >
-            Prep → Interview Readiness
-          </button>
-          {!canPrep && (
-            <p className="text-xs text-muted-foreground mt-1">
-              Add company, position & link
-            </p>
-          )}
-        </div>
       </div>
 
       {/* Mobile: always visible details */}
