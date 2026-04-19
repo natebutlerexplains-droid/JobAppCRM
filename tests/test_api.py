@@ -1,5 +1,4 @@
 import pytest
-import json
 import sys
 import os
 
@@ -7,7 +6,6 @@ import os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'backend'))
 
 from app import app as flask_app
-from models import Database, Application
 
 
 @pytest.fixture
@@ -16,13 +14,6 @@ def client():
     flask_app.config['TESTING'] = True
     with flask_app.test_client() as client:
         yield client
-
-
-@pytest.fixture
-def test_db(temp_db):
-    """Override the database in the Flask app for testing."""
-    # This is a simplified version - in real testing you'd want to patch the db instance
-    return temp_db
 
 
 class TestApplicationAPI:
@@ -171,31 +162,6 @@ class TestStageSuggestionAPI:
         response = client.get('/api/stage-suggestions')
         assert response.status_code == 200
         assert isinstance(response.json, list)
-
-
-class TestUnlinkedEmailsAPI:
-    """Tests for unlinked emails API."""
-
-    def test_get_unlinked_emails(self, client):
-        """Test getting unlinked emails."""
-        response = client.get('/api/emails/unlinked')
-        assert response.status_code == 200
-        assert isinstance(response.json, list)
-
-
-class TestSyncLogsAPI:
-    """Tests for sync logs API."""
-
-    def test_get_sync_logs(self, client):
-        """Test getting sync logs."""
-        response = client.get('/api/sync-logs')
-        assert response.status_code == 200
-        assert isinstance(response.json, list)
-
-    def test_get_sync_logs_with_limit(self, client):
-        """Test getting sync logs with limit."""
-        response = client.get('/api/sync-logs?limit=5')
-        assert response.status_code == 200
 
 
 class TestErrorHandling:

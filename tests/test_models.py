@@ -1,7 +1,7 @@
 import pytest
 from datetime import datetime
 
-from models import Application, Email, Interaction, StageSuggestion, SyncLog
+from models import Application, Email, Interaction, StageSuggestion
 
 
 class TestApplication:
@@ -69,60 +69,24 @@ class TestEmail:
         """Test creating an email."""
         email_id = Email.create(
             temp_db,
-            ms_message_id="test-msg-123",
             sender="recruiter@company.com",
             subject="Interview Request",
             body_excerpt="We'd like to schedule an interview",
             date_received="2025-03-15T10:00:00",
-            email_type="interview_request",
             application_id=sample_application["id"],
-            linked_confidence=0.9,
         )
         assert email_id > 0
 
-    def test_is_processed(self, temp_db):
-        """Test email deduplication."""
-        msg_id = "unique-msg-id-123"
-
-        # Should not be processed initially
-        assert not Email.is_processed(temp_db, msg_id)
-
-        # Mark as processed
-        Email.mark_as_processed(temp_db, msg_id)
-
-        # Should now be processed
-        assert Email.is_processed(temp_db, msg_id)
-
-    def test_get_unlinked_emails(self, temp_db, sample_application):
-        """Test getting unlinked emails."""
-        # Create an email without linking
-        Email.create(
-            temp_db,
-            ms_message_id="unlinked-1",
-            sender="random@example.com",
-            subject="Spam",
-            date_received="2025-03-15T10:00:00",
-        )
-
-        # Create a linked email
-        Email.create(
-            temp_db,
-            ms_message_id="linked-1",
-            sender="recruiter@google.com",
-            subject="Interview Request",
-            date_received="2025-03-15T11:00:00",
-            application_id=sample_application["id"],
-        )
-
-        unlinked = Email.get_unlinked(temp_db)
-        assert len(unlinked) == 1
-        assert unlinked[0]["ms_message_id"] == "unlinked-1"
+    def test_get_by_id(self, temp_db, sample_email):
+        """Test getting an email by ID."""
+        email = Email.get_by_id(temp_db, sample_email["id"])
+        assert email is not None
+        assert email["sender"] == "recruiter@google.com"
 
     def test_link_email(self, temp_db, sample_application):
         """Test linking an email to an application."""
         email_id = Email.create(
             temp_db,
-            ms_message_id="test-link-123",
             sender="recruiter@company.com",
             subject="Interview",
             date_received="2025-03-15T10:00:00",
@@ -130,9 +94,9 @@ class TestEmail:
 
         Email.link_to_application(temp_db, email_id, sample_application["id"])
 
-        # Check that email is no longer in unlinked list
-        unlinked = Email.get_unlinked(temp_db)
-        assert len(unlinked) == 0
+        # Check that email is linked
+        email = Email.get_by_id(temp_db, email_id)
+        assert email["application_id"] == sample_application["id"]
 
 
 class TestInteraction:
@@ -231,34 +195,3 @@ class TestStageSuggestion:
         # Check that suggestion is dismissed
         pending = StageSuggestion.get_pending(temp_db)
         assert len(pending) == 0
-
-
-class TestSyncLog:
-    """Tests for SyncLog model."""
-
-    def test_create_and_update_sync_log(self, temp_db):
-        """Test creating and updating a sync log."""
-        log_id = SyncLog.create(temp_db)
-
-        SyncLog.update(
-            temp_db,
-            log_id,
-            emails_fetched=10,
-            emails_processed=8,
-            apps_created=2,
-            status="completed",
-        )
-
-        latest = SyncLog.get_latest(temp_db)
-        assert latest["emails_fetched"] == 10
-        assert latest["status"] == "completed"
-
-    def test_get_recent_sync_logs(self, temp_db):
-        """Test getting recent sync logs."""
-        # Create multiple logs
-        for i in range(5):
-            log_id = SyncLog.create(temp_db)
-            SyncLog.update(temp_db, log_id, status="completed")
-
-        recent = SyncLog.get_recent(temp_db, limit=3)
-        assert len(recent) == 3

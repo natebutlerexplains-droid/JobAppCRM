@@ -3,63 +3,41 @@ import logging
 from pathlib import Path
 from dotenv import load_dotenv
 
-# Load environment variables from .env file
+# Load environment variables from .env file (look in parent directory)
+env_path = Path(__file__).parent.parent / ".env"
+load_dotenv(dotenv_path=env_path)
+
+# Also try current directory
 load_dotenv()
 
 # Configuration class
 class Config:
-    # Database - use path relative to project root (parent of backend/)
-    # Note: __file__ is relative when running from different directories,
-    # so we explicitly construct the path from the backend directory
-    _BACKEND_DIR = Path(__file__).parent
-    _PROJECT_ROOT = _BACKEND_DIR.parent
-    _DB_DEFAULT = str(_PROJECT_ROOT / "jobs.db")
-    DATABASE_PATH = os.getenv("DATABASE_PATH", _DB_DEFAULT)
-
-    # Microsoft Graph API
-    MS_GRAPH_CLIENT_ID = os.getenv("MS_GRAPH_CLIENT_ID")
-    MS_GRAPH_CLIENT_SECRET = os.getenv("MS_GRAPH_CLIENT_SECRET")
-    MS_GRAPH_USERNAME = os.getenv("MS_GRAPH_USERNAME")
-    MS_GRAPH_PASSWORD = os.getenv("MS_GRAPH_PASSWORD")
-    MS_GRAPH_AUTHORITY = "https://login.microsoftonline.com/consumers"
-    MS_GRAPH_SCOPE = ["Mail.Read"]
-    MS_GRAPH_REDIRECT_URI = "http://localhost:5001"
-    MS_GRAPH_API_ENDPOINT = "https://graph.microsoft.com/v1.0"
-
-    # Token storage
-    TOKEN_CACHE_PATH = os.path.expanduser("~/.jobcrm/token.json")
-
-    # Google Gemini API
-    GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
-    GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-1.5-flash")
-
-    # Email sync settings
-    EMAIL_SYNC_DAYS_BACK = int(os.getenv("EMAIL_SYNC_DAYS_BACK", "30"))
-    CONFIDENCE_THRESHOLD = float(os.getenv("CONFIDENCE_THRESHOLD", "0.7"))
-
-    # Scheduler settings
-    SYNC_SCHEDULE_HOUR = 2  # 2 AM daily
-    SYNC_SCHEDULE_MINUTE = 0
-    STARTUP_SYNC_THRESHOLD_HOURS = 4  # Run on startup if >4 hours since last sync
-    SYNC_PROGRESS_EVERY = int(os.getenv("SYNC_PROGRESS_EVERY", "1"))
+    # Database
+    DATABASE_PATH = os.getenv("DATABASE_PATH", "./jobs.db")
+    USE_POSTGRES = os.getenv("USE_POSTGRES", "true").lower() == "true"
+    SUPABASE_CONNECTION_STRING = os.getenv(
+        "SUPABASE_CONNECTION_STRING",
+        "postgresql://postgres:Semo4735!$!@db.fbrmhmudkzgwbxllbwkd.supabase.co:5432/postgres"
+    )
 
     # Flask settings
     FLASK_ENV = os.getenv("FLASK_ENV", "development")
     FLASK_DEBUG = os.getenv("FLASK_DEBUG", "false").lower() == "true"
-    FLASK_PORT = int(os.getenv("FLASK_PORT", "5001"))
+    FLASK_PORT = int(os.getenv("FLASK_PORT", "5000"))
     SECRET_KEY = os.getenv("SECRET_KEY", "dev-key-change-in-production")
 
     # Logging
     LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")
     LOG_DIR = "./logs"
 
-    @staticmethod
-    def validate():
-        """Validate that required environment variables are set."""
-        if not Config.MS_GRAPH_CLIENT_ID:
-            raise ValueError("MS_GRAPH_CLIENT_ID not set in .env")
-        if not Config.GEMINI_API_KEY:
-            raise ValueError("GEMINI_API_KEY not set in .env")
+    # Claude API
+    CLAUDE_API_KEY = os.getenv("CLAUDE_API_KEY", "")
+
+    # Email sync
+    EMAIL_SYNC_DAYS_BACK = int(os.getenv("EMAIL_SYNC_DAYS_BACK", "7"))
+    STARTUP_SYNC_THRESHOLD_HOURS = int(os.getenv("STARTUP_SYNC_THRESHOLD_HOURS", "4"))
+    SYNC_SCHEDULE_HOUR = int(os.getenv("SYNC_SCHEDULE_HOUR", "2"))
+    SYNC_SCHEDULE_MINUTE = int(os.getenv("SYNC_SCHEDULE_MINUTE", "0"))
 
 
 def setup_logging():

@@ -1,5 +1,4 @@
 import pytest
-import sqlite3
 import tempfile
 from datetime import datetime, timedelta
 import sys
@@ -8,7 +7,7 @@ import os
 # Add backend directory to path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'backend'))
 
-from models import Database, Application, Email, Interaction, StageSuggestion, SyncLog
+from models import Database, Application, Email, Interaction, StageSuggestion
 
 
 @pytest.fixture
@@ -64,14 +63,11 @@ def sample_email(temp_db, sample_application):
     """Create a sample email."""
     email_id = Email.create(
         temp_db,
-        ms_message_id="sample-msg-id-1",
         sender="recruiter@google.com",
         subject="We received your application",
         body_excerpt="Thank you for your application to Google",
         date_received=datetime.now().isoformat(),
-        email_type="application_confirmation",
         application_id=sample_application["id"],
-        linked_confidence=0.95,
     )
     return Email.get_by_id(temp_db, email_id)
 
@@ -101,18 +97,3 @@ def sample_stage_suggestion(temp_db, sample_application):
         confidence=0.85,
     )
     return suggestion_id
-
-
-@pytest.fixture
-def sample_sync_log(temp_db):
-    """Create a sample sync log."""
-    log_id = SyncLog.create(temp_db)
-    SyncLog.update(
-        temp_db,
-        log_id,
-        emails_fetched=10,
-        emails_processed=8,
-        apps_created=2,
-        status="completed",
-    )
-    return log_id

@@ -3,12 +3,17 @@ import json
 from datetime import datetime
 from typing import Optional, List, Dict, Any
 import os
+import psycopg2
+from psycopg2 import extras
 
 class Database:
-    def __init__(self, db_path: str):
+    def __init__(self, db_path: str, use_postgres: bool = False, connection_string: str = None):
         self.db_path = db_path
         self.connection = None
-        self._ensure_db_dir()
+        self.use_postgres = use_postgres
+        self.connection_string = connection_string
+        if not use_postgres:
+            self._ensure_db_dir()
         self.init_connection()
 
     def _ensure_db_dir(self):
@@ -17,12 +22,25 @@ class Database:
         os.makedirs(db_dir, exist_ok=True)
 
     def init_connection(self):
-        """Initialize database connection with WAL mode."""
-        self.connection = sqlite3.connect(self.db_path, check_same_thread=False)
-        self.connection.row_factory = sqlite3.Row
-        # Enable WAL mode for concurrent access
-        self.connection.execute("PRAGMA journal_mode=WAL")
-        self.connection.execute("PRAGMA synchronous=NORMAL")
+        """Initialize database connection (SQLite or PostgreSQL)."""
+        if self.use_postgres:
+            try:
+                self.connection = psycopg2.connect(self.connection_string)
+                self.connection.autocommit = False
+            except Exception as e:
+                print(f"Failed to connect to Supabase: {e}")
+                print("Falling back to SQLite...")
+                self.use_postgres = False
+                self._ensure_db_dir()
+                self.connection = sqlite3.connect(self.db_path, check_same_thread=False)
+                self.connection.row_factory = sqlite3.Row
+        else:
+            self.connection = sqlite3.connect(self.db_path, check_same_thread=False)
+            self.connection.row_factory = sqlite3.Row
+            # Enable WAL mode for concurrent access
+            self.connection.execute("PRAGMA journal_mode=WAL")
+            self.connection.execute("PRAGMA synchronous=NORMAL")
+
         self.create_tables()
         self._migrate_sync_logs_status()
 
@@ -40,7 +58,7 @@ class Database:
             job_url TEXT,
             date_submitted DATE NOT NULL,
             status TEXT NOT NULL DEFAULT 'Submitted'
-                CHECK(status IN ('Submitted', 'More Info Required', 'Interview Started', 'Denied', 'Offered')),
+                CHECK(status IN ('Submitted', 'Phone Screening', '1st Round', '2nd Round', '3rd Round', 'Archived')),
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
@@ -184,6 +202,31 @@ class Database:
         except Exception:
             pass
 
+        try:
+            cursor.execute("ALTER TABLE interview_prep ADD COLUMN web_crawled BOOLEAN DEFAULT 0")
+        except Exception:
+            pass
+
+        try:
+            cursor.execute("ALTER TABLE interview_prep ADD COLUMN data_source TEXT DEFAULT 'gemini_knowledge'")
+        except Exception:
+            pass
+
+        try:
+            cursor.execute("ALTER TABLE applications ADD COLUMN order_position INTEGER DEFAULT 0")
+        except Exception:
+            pass
+
+        try:
+            cursor.execute("ALTER TABLE applications ADD COLUMN job_location TEXT")
+        except Exception:
+            pass
+
+        try:
+            cursor.execute("ALTER TABLE interview_prep ADD COLUMN people_met TEXT")
+        except Exception:
+            pass
+
         self.connection.commit()
 
     def _sync_logs_allows_cancelled(self) -> bool:
@@ -274,7 +317,7 @@ class Application:
     @staticmethod
     def get_all(db: Database) -> List[Dict[str, Any]]:
         """Get all applications."""
-        cursor = db.execute("SELECT * FROM applications ORDER BY date_submitted DESC")
+        cursor = db.execute("SELECT * FROM applications ORDER BY status, order_position ASC, date_submitted DESC")
         return [dict(row) for row in cursor.fetchall()]
 
     @staticmethod
@@ -289,7 +332,7 @@ class Application:
     @staticmethod
     def update(db: Database, app_id: int, fields: Dict[str, Any]):
         """Update application with whitelisted fields."""
-        ALLOWED = {'company_name', 'job_title', 'job_url', 'notes', 'salary_min', 'salary_max', 'salary_negotiation_target', 'status', 'company_domain'}
+        ALLOWED = {'company_name', 'job_title', 'job_url', 'notes', 'salary_min', 'salary_max', 'salary_negotiation_target', 'status', 'company_domain', 'order_position', 'job_location', 'work_arrangement', 'work_arrangement_notes', 'employment_type', 'pay_type', 'company_website'}
 
         # Filter to allowed fields only
         updates = {k: v for k, v in fields.items() if k in ALLOWED}
@@ -640,13 +683,7 @@ class ClassificationFeedback:
         (not all-time count which barely moves with 2000+ emails).
         Training examples count is all-time total.
         """
-        # 30-day window for accuracy (recent classifications only)
-        recent_classified = db.execute(
-            """SELECT COUNT(*) as cnt FROM emails
-               WHERE gemini_classification IS NOT NULL
-               AND date_received >= datetime('now', '-30 days')"""
-        ).fetchone()["cnt"]
-
+        # 30-day window for accuracy (recent corrections only)
         recent_corrected = db.execute(
             """SELECT COUNT(*) as cnt FROM classification_feedback
                WHERE created_at >= datetime('now', '-30 days')"""
@@ -665,18 +702,15 @@ class ClassificationFeedback:
         ).fetchall()
         by_target = {row["corrected_category"]: row["cnt"] for row in by_target_rows}
 
-        # Calculate accuracy using 30-day window so gauge fluctuates meaningfully
-        if recent_classified > 0:
-            accuracy_score = round(
-                ((recent_classified - recent_corrected) / recent_classified) * 100,
-                1
-            )
-        else:
-            accuracy_score = 100.0
+        # Accuracy based on corrections (no per-email classification storage after Claude migration)
+        accuracy_score = 100.0 if total_training_examples == 0 else round(
+            (max(0, total_training_examples - recent_corrected) / total_training_examples) * 100,
+            1
+        )
 
         return {
-            "total_classified": recent_classified,  # 30-day window
-            "total_corrected": recent_corrected,  # 30-day window
+            "total_classified": total_training_examples,
+            "total_corrected": recent_corrected,  # 30-day corrections
             "training_examples": total_training_examples,  # all-time
             "accuracy_score": accuracy_score,
             "by_target": by_target,
@@ -765,6 +799,13 @@ class InterviewPrep:
 
         sql = f"UPDATE interview_prep SET {', '.join(set_clauses)} WHERE id = ?"
         db.execute(sql, values)
+        db.commit()
+        return True
+
+    @staticmethod
+    def delete_by_application(db: Database, app_id: int) -> bool:
+        """Delete interview prep record for an application."""
+        db.execute("DELETE FROM interview_prep WHERE application_id = ?", (app_id,))
         db.commit()
         return True
 

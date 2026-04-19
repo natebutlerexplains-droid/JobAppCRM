@@ -24,14 +24,35 @@ app = Flask(__name__)
 app.config["JSON_SORT_KEYS"] = False
 app.config["MAX_CONTENT_LENGTH"] = 16 * 1024 * 1024  # 16MB max
 
-# CORS: Only allow localhost in dev
+# CORS: Allow localhost dev and production Vercel domain
 CORS(app, resources={
     r"/api/*": {
         "origins": [
             "http://localhost:3000",
             "http://localhost:3001",
+            "http://localhost:3002",
+            "http://localhost:3003",
+            "http://localhost:3004",
+            "http://localhost:3005",
+            "http://localhost:3006",
+            "http://localhost:3007",
+            "http://localhost:3008",
+            "http://localhost:3009",
+            "http://localhost:3010",
+            "http://localhost:3307",
             "http://127.0.0.1:3000",
-            "http://127.0.0.1:3001"
+            "http://127.0.0.1:3001",
+            "http://127.0.0.1:3002",
+            "http://127.0.0.1:3003",
+            "http://127.0.0.1:3004",
+            "http://127.0.0.1:3005",
+            "http://127.0.0.1:3006",
+            "http://127.0.0.1:3007",
+            "http://127.0.0.1:3008",
+            "http://127.0.0.1:3009",
+            "http://127.0.0.1:3010",
+            "http://127.0.0.1:3307",
+            "https://job-app-crm.vercel.app"
         ],
         "methods": ["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
         "allow_headers": ["Content-Type"],
@@ -57,8 +78,12 @@ def add_security_headers(response):
     return response
 
 # Initialize database
-logger.info(f"Initializing database at: {Config.DATABASE_PATH}")
-db = Database(Config.DATABASE_PATH)
+if Config.USE_POSTGRES:
+    logger.info("Initializing Supabase PostgreSQL connection...")
+    db = Database(Config.DATABASE_PATH, use_postgres=True, connection_string=Config.SUPABASE_CONNECTION_STRING)
+else:
+    logger.info(f"Initializing SQLite database at: {Config.DATABASE_PATH}")
+    db = Database(Config.DATABASE_PATH)
 
 # Initialize scheduler
 scheduler = BackgroundScheduler()
@@ -74,7 +99,7 @@ def sync_emails_job():
     current_sync["log_id"] = None
     try:
         processor = EmailProcessor(db, cancel_event=cancel_event)
-        stats = processor.process_emails(days_back=Config.EMAIL_SYNC_DAYS_BACK)
+        stats = processor.process_emails(days_back=getattr(Config, 'EMAIL_SYNC_DAYS_BACK', 7))
         logger.info(f"Email sync completed: {stats}")
     except Exception as e:
         logger.error(f"Email sync failed: {e}")
@@ -588,6 +613,29 @@ def update_application(app_id):
         return jsonify({"error": str(e)}), 400
     except Exception as e:
         logger.error(f"Error updating application: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/applications/reorder", methods=["POST"])
+def reorder_applications():
+    """Bulk update order_position for applications."""
+    try:
+        data = request.json or {}
+        orders = data.get('orders', [])
+
+        if not orders:
+            return jsonify({"error": "No orders provided"}), 400
+
+        # Update each application's order_position
+        for order in orders:
+            app_id = order.get('id')
+            position = order.get('order_position')
+            if app_id is not None and position is not None:
+                Application.update(db, app_id, {'order_position': position})
+
+        return jsonify({"message": "Applications reordered"}), 200
+    except Exception as e:
+        logger.error(f"Error reordering applications: {e}")
         return jsonify({"error": str(e)}), 500
 
 
@@ -1333,12 +1381,12 @@ def auth_status():
         return jsonify({"authenticated": False, "error": str(e)}), 200
 
 
-@app.route("/api/gemini/health", methods=["GET"])
-def gemini_health():
-    """Check Gemini API health with a lightweight classification call."""
+@app.route("/api/claude/health", methods=["GET"])
+def claude_health():
+    """Check Claude API health with a lightweight classification call."""
     try:
-        from gemini_classifier import GeminiClassifier
-        classifier = GeminiClassifier()
+        from claude_classifier import ClaudeClassifier
+        classifier = ClaudeClassifier()
         result = classifier.classify_email(
             subject="Application received for Software Engineer",
             body="Thanks for applying to Acme Corp for the Software Engineer role.",
@@ -1346,14 +1394,14 @@ def gemini_health():
         )
         return jsonify({
             "ok": True,
-            "model": Config.GEMINI_MODEL,
+            "model": "claude-3-5-sonnet-20241022",
             "result": result,
         }), 200
     except Exception as e:
-        logger.error(f"Gemini health check failed: {e}")
+        logger.error(f"Claude health check failed: {e}")
         return jsonify({
             "ok": False,
-            "model": Config.GEMINI_MODEL,
+            "model": "claude-3-5-sonnet-20241022",
             "error": str(e),
         }), 200
 
@@ -1405,36 +1453,114 @@ def set_sync_schedule():
         return jsonify({"error": str(e)}), 500
 
 
+@app.route("/api/settings/gemini-keys", methods=["GET"])
+def get_claude_api_status():
+    """Get Claude API status information (migration endpoint from Gemini)."""
+    try:
+        # Claude uses a single API key with no rotation needed
+        # Return simplified status for compatibility with frontend
+        status = {
+            "current_key": 1,
+            "total_keys": 1,
+            "quota_exhausted": [],
+            "keys_available": 1,
+            "api": "claude",
+            "model": "claude-3-5-sonnet-20241022",
+            "rate_limit": "100k tokens/minute",
+            "status": "operational" if Config.CLAUDE_API_KEY else "not configured"
+        }
+
+        return jsonify(status), 200
+    except Exception as e:
+        logger.error(f"Error getting Claude API status: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/settings/gemini-keys/reset", methods=["POST"])
+def reset_claude_quota():
+    """No-op endpoint for compatibility (Claude doesn't need quota resets)."""
+    try:
+        logger.info("Claude API quota reset requested (no-op - Claude doesn't need key rotation)")
+        status = {
+            "current_key": 1,
+            "total_keys": 1,
+            "quota_exhausted": [],
+            "keys_available": 1,
+            "api": "claude",
+            "status": "operational",
+            "message": "Claude API doesn't require quota resets - always available"
+        }
+
+        return jsonify(status), 200
+    except Exception as e:
+        logger.error(f"Error in Claude quota reset endpoint: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
 @app.route("/api/applications/<int:app_id>/prep/research", methods=["POST"])
 def research_company_prep(app_id):
-    """Research a company for interview prep."""
+    """Research a company for interview prep with optional website crawling."""
     try:
         # Fetch application
         app = Application.get_by_id(db, app_id)
         if not app:
             return jsonify({"error": "Application not found"}), 404
 
-        # Validate core trio: company_name, job_title, job_url
+        # Get company_website from request body or application
+        data = request.get_json() or {}
+        company_website = data.get("company_website") or app.get("company_website")
+
+        # Validate required fields: company_name, job_title (job_url no longer required)
         if not app.get("company_name") or not app.get("company_name").strip():
             return jsonify({"error": "Company name is required"}), 400
         if not app.get("job_title") or not app.get("job_title").strip():
             return jsonify({"error": "Job title is required"}), 400
-        if not app.get("job_url") or not app.get("job_url").strip():
-            return jsonify({"error": "Job URL is required"}), 400
 
         # Get or create interview prep
         prep = InterviewPrep.get_or_create(db, app_id)
 
-        # Call Gemini to research company
-        processor = EmailProcessor(db)
-        research = processor.classifier.research_company(
-            company_name=app["company_name"],
-            job_title=app["job_title"],
-            job_url=app.get("job_url")
-        )
+        # Research company using Claude API
+        try:
+            processor = EmailProcessor(db)
+            research_result = processor.classifier.research_company_with_website(
+                company_name=app["company_name"],
+                job_title=app["job_title"],
+                job_url=app.get("job_url", ""),
+                company_website=company_website
+            )
+        except Exception as e:
+            logger.error(f"Research error: {e}")
+            return jsonify({"error": str(e)}), 500
 
-        # Save research to prep
-        InterviewPrep.update(db, prep["id"], {"company_research": json.dumps(research)})
+        if research_result is None:
+            return jsonify({"error": "Research failed - Claude API error"}), 500
+
+        # Only save research if it succeeded (has actual data, not error state)
+        if research_result.get("data_source") != "error" and (research_result.get("company_overview") or len(research_result.get("key_products", [])) > 0):
+            # Save successful research to prep
+            update_fields = {
+                "company_research": json.dumps(research_result),
+                "web_crawled": research_result.get("web_crawled", False),
+                "data_source": research_result.get("data_source", "claude_knowledge")
+            }
+            InterviewPrep.update(db, prep["id"], update_fields)
+            logger.info(f"✅ Research data saved for {app['company_name']} via Claude API")
+        else:
+            # Research failed (API error, quota exceeded, etc.) - don't overwrite existing data
+            logger.warning(f"⚠️  Research failed - not overwriting existing data. Reason: {research_result.get('data_source')}")
+            # If there's already good data from a previous research, return it
+            if prep.get("company_research"):
+                logger.info(f"Returning existing research data for {app['company_name']}")
+                # Fetch updated prep
+                updated_prep = InterviewPrep.get_by_id(db, prep["id"])
+                # Return existing data with error status so frontend knows research failed
+                return jsonify(updated_prep), 200
+            else:
+                # No existing data and new research failed
+                return jsonify({
+                    "error": "Research failed - Claude API error",
+                    "retry_after": "try again in a few minutes"
+                }), 500
 
         # Fetch updated prep
         updated_prep = InterviewPrep.get_by_id(db, prep["id"])
@@ -1442,6 +1568,44 @@ def research_company_prep(app_id):
 
     except Exception as e:
         logger.error(f"Error researching company: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/applications/<int:app_id>/prep/research-markdown", methods=["POST"])
+def upload_research_markdown(app_id):
+    """Accept uploaded markdown research from user."""
+    try:
+        # Fetch application
+        app = Application.get_by_id(db, app_id)
+        if not app:
+            return jsonify({"error": "Application not found"}), 404
+
+        # Get the parsed markdown research from request
+        data = request.get_json() or {}
+        company_research = data.get("company_research", {})
+
+        # Validate that company_overview is present
+        if not company_research.get("company_overview"):
+            return jsonify({"error": "Research must include Company Overview section"}), 400
+
+        # Get or create prep record
+        prep = InterviewPrep.get_or_create(db, app_id)
+
+        # Save research with markdown_upload source
+        InterviewPrep.update(db, prep["id"], {
+            "company_research": json.dumps(company_research),
+            "data_source": "markdown_upload",
+            "web_crawled": False
+        })
+
+        logger.info(f"✅ Markdown research uploaded for {app['company_name']}")
+
+        # Fetch and return updated prep
+        updated_prep = InterviewPrep.get_by_id(db, prep["id"])
+        return jsonify(updated_prep), 200
+
+    except Exception as e:
+        logger.error(f"Error uploading research markdown: {e}")
         return jsonify({"error": str(e)}), 500
 
 
@@ -1571,6 +1735,18 @@ def get_application_prep(app_id):
         return jsonify({"error": str(e)}), 500
 
 
+@app.route("/api/applications/<int:app_id>/prep", methods=["DELETE"])
+def delete_application_prep(app_id):
+    """Delete interview prep for an application."""
+    try:
+        InterviewPrep.delete_by_application(db, app_id)
+        return jsonify({"message": "Interview prep deleted"}), 200
+
+    except Exception as e:
+        logger.error(f"Error deleting prep: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
 @app.route("/api/prep/history", methods=["GET"])
 def get_prep_history():
     """Get all interview prep sessions with application info."""
@@ -1637,7 +1813,7 @@ def validate_required_fields(data, required_fields):
 
 def validate_status(status):
     """Validate application status."""
-    allowed = ["Submitted", "More Info Required", "Interview Started", "Denied", "Offered"]
+    allowed = ["Submitted", "Phone Screening", "1st Round", "2nd Round", "3rd Round", "Archived"]
     if status not in allowed:
         raise ValueError(f"Invalid status. Must be one of: {', '.join(allowed)}")
 
@@ -1666,7 +1842,7 @@ if __name__ == "__main__":
 
         # Run Flask app with use_reloader=False to avoid double-scheduling
         app.run(
-            host="localhost",
+            host="0.0.0.0",
             port=Config.FLASK_PORT,
             debug=Config.FLASK_DEBUG,
             use_reloader=False,

@@ -1,6 +1,6 @@
 import axios from 'axios'
 
-const API_BASE = import.meta.env.VITE_API_BASE || '/api'
+const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:5001/api'
 
 const api = axios.create({
   baseURL: API_BASE,
@@ -39,7 +39,12 @@ export const createApplication = (data) => api.post('/applications', data)
 export const getApplication = (id) => api.get(`/applications/${id}`)
 export const updateApplication = (id, data) => api.patch(`/applications/${id}`, data)
 export const deleteApplication = (id) => api.delete(`/applications/${id}`)
+export const reorderApplications = (orders) => api.post('/applications/reorder', { orders })
+
+// Emails
 export const getApplicationEmails = (id) => api.get(`/applications/${id}/emails`)
+
+// Interactions
 export const getApplicationInteractions = (id) => api.get(`/applications/${id}/interactions`)
 export const createInteraction = (appId, data) => api.post(`/applications/${appId}/interactions`, data)
 export const getFilterOptions = () => api.get('/filter-options')
@@ -51,28 +56,15 @@ export const getStats = () => api.get('/stats')
 export const getStageSuggestions = () => api.get('/stage-suggestions')
 export const updateStageSuggestion = (id, data) => api.patch(`/stage-suggestions/${id}`, data)
 
-// Emails
-export const getUnlinkedEmails = () => api.get('/emails/unlinked')
-export const getNonJobRelatedEmails = () => api.get('/emails/non-job-related')
-export const getJobLeads = () => api.get('/emails/job-leads')
-export const linkEmail = (emailId, appId) => api.patch(`/emails/${emailId}/link`, { app_id: appId })
-export const processUnlinkedEmails = (limit = null) => api.post('/emails/process-unlinked', { limit })
-export const reclassifyEmails = (category = 'unrelated', limit = 20) => api.post('/emails/reclassify', { category, limit })
-export const correctEmailClassification = (emailId, correctedCategory, reasonCode) =>
-  api.post(`/emails/${emailId}/correct`, { corrected_category: correctedCategory, reason_code: reasonCode })
-export const trashEmail = (emailId, reasonCode = 'CONFIRMED_SPAM') =>
-  api.delete(`/emails/${emailId}`, { data: { reason_code: reasonCode } })
-
-// Sync Logs
-export const getSyncLogs = (limit = 10) => api.get(`/sync-logs?limit=${limit}`)
-export const runEmailSync = () => api.post('/run-email-sync')
-export const cancelEmailSync = () => api.post('/cancel-email-sync')
-
-// Classifier Feedback & Training
-export const getClassifierStats = () => api.get('/classifier/stats')
-
-// Gemini Health
-export const getGeminiHealth = () => api.get('/gemini/health')
+// Interview Prep
+export const getInterviewPrepHistory = () => api.get('/prep/history')
+export const getInterviewPrep = (appId) => api.get(`/applications/${appId}/prep`)
+export const deleteInterviewPrep = (appId) => api.delete(`/applications/${appId}/prep`)
+export const researchCompanyPrep = (appId, data = {}) => api.post(`/applications/${appId}/prep/research`, data)
+export const generateInterviewQuestions = (appId) => api.post(`/applications/${appId}/prep/generate`)
+export const uploadMarkdownResearch = (appId, parsedResearch) => api.post(`/applications/${appId}/prep/research-markdown`, {
+  company_research: parsedResearch
+})
 
 // Interview Prep
 export const getApplicationPrep = (id) => api.get(`/applications/${id}/prep`)

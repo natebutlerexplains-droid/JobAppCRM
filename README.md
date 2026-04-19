@@ -1,396 +1,253 @@
-# Job Application CRM
+# →PIPELINE
 
-> A personal, fully local job application tracking system that automatically syncs emails from Outlook, classifies them with AI, and suggests pipeline stage changes.
+> A job application tracker with multi-user support, interview prep tools, and markdown-based research. Built with Firebase for cloud storage and Google sign-in.
 
-**⚡ No external hosting required. Everything runs on your machine.**
+**☁️ Cloud-hosted on Firebase. Secure, multi-user, zero server management.**
 
-![GitHub](https://img.shields.io/badge/repo-private-lightgrey) ![Python](https://img.shields.io/badge/python-3.11+-blue) ![React](https://img.shields.io/badge/react-18+-cyan) ![SQLite](https://img.shields.io/badge/sqlite-WAL-green)
+![Firebase](https://img.shields.io/badge/firebase-hosted-orange) ![React](https://img.shields.io/badge/react-18+-cyan) ![Google Auth](https://img.shields.io/badge/auth-google-blue)
 
 ---
 
 ## ✨ Features
 
-- 📧 **Auto-linking Emails** — Syncs emails from Outlook (via Microsoft Graph API) and intelligently links them to job applications using domain matching, keyword detection, and AI classification
-- 🤖 **AI Classification** — Uses Google Gemini to classify emails: application confirmations, interview requests, rejections, offers, and more
-- 🎯 **Pipeline Tracking** — Drag-and-drop kanban board with five stages: Submitted → More Info Required → Interview Started → Denied / Offered
-- 💡 **Smart Suggestions** — AI recommends stage changes when relevant emails arrive (e.g., "move to Interview Started" when interview request detected)
-- 🔄 **Flexible Syncing** — Automatic daily 2 AM sync + on-demand manual sync with progress tracking and ETA
-- 📊 **Unlinked Tray** — Searchable panel for emails that don't auto-match, with easy manual linking to applications
-- 🔐 **Fully Private** — All data stays on your machine; no cloud dependencies beyond free-tier APIs
-- 📈 **Operational Control** — Monitor sync health, cancel in-progress syncs, view detailed sync history
+- 🎯 **Pipeline Tracking** — Five-stage kanban: Submitted → Phone Screening → 1st Round → 2nd Round → 3rd Round
+- 👤 **Multi-User Profiles** — Sign in with Google; separate dashboards per user
+- 📝 **Interview Prep** — Upload markdown research notes; auto-parsed and saved
+- 🎓 **Interview Questions** — Generate practice questions from research
+- 🎨 **3D Card Design** — Responsive cards with hover details (target salary, location)
+- 🔐 **Secure & Private** — Firebase Firestore with row-level security; only your data visible
+- ⚡ **Real-Time Sync** — Changes sync instantly across devices
 
 ## 🛠 Tech Stack
 
 | Component | Technology | Notes |
 |-----------|-----------|-------|
-| **Backend** | Python 3.11 + Flask | RESTful API, async email sync |
-| **Database** | SQLite with WAL mode | Concurrent access, no external DB needed |
-| **Frontend** | React 18 + Vite | Fast dev experience, optimized builds |
+| **Frontend** | React 18 + Vite | Fast, reactive UI |
+| **Auth** | Firebase Authentication | Google sign-in only |
+| **Database** | Firestore (Firebase) | Realtime, serverless |
+| **Hosting** | Firebase Hosting | Global CDN, HTTPS |
 | **UI Framework** | shadcn/ui + Tailwind CSS | Beautiful, accessible components |
-| **Email** | Microsoft Graph API | OAuth2 device code flow, personal accounts |
-| **AI** | Google Gemini (free tier) | Email classification & suggestions |
-| **Scheduler** | APScheduler | Background jobs, configurable schedule |
-| **Containerization** | Docker + docker-compose | Optional: deploy anywhere |
+| **State** | React Hooks + Context | Auth state, user data |
 
 ---
 
-## 🚀 Quick Start
+## 🚀 Live Demo
+
+**→PIPELINE is live at:** [job-app-crm.firebaseapp.com](https://job-app-crm.firebaseapp.com)
+
+Just sign in with your Google account—no setup needed!
+
+## 🏠 Local Development
 
 ### Prerequisites
-- Python 3.11+
 - Node.js 16+
 - npm 8+
+- Google account (for sign-in testing)
 
-### Automatic Setup (Recommended)
-```bash
-./setup.sh
-```
-
-This will:
-1. Check for required software
-2. Create `.env` file
-3. Set up Python virtual environment and install dependencies
-4. Initialize SQLite database
-5. Install Node.js dependencies
-6. Guide you through API key setup
-
-### Manual Setup
+### Setup
 
 ```bash
-# Create environment file
-cp .env.example .env
+# Clone repo
+git clone https://github.com/NateButlerExplains/JobAppCRM.git
+cd JobAppCRM
 
-# Python setup
-python3 -m venv venv
-source venv/bin/activate  # macOS/Linux
-# or: venv\Scripts\activate  # Windows
-pip install -r backend/requirements.txt
-python3 backend/models.py  # Initialize database
-
-# Node setup
+# Install dependencies
 cd frontend
 npm install
 cd ..
 
-# Create logs directory
-mkdir -p logs
-```
-
-## Getting API Keys
-
-### 1. Microsoft Graph API (for Outlook)
-
-Personal Microsoft Accounts (outlook.com, hotmail.com) require OAuth2 device code flow.
-
-**Steps:**
-1. Go to [Azure Portal](https://portal.azure.com) (create free account if needed)
-2. Navigate to **Azure Active Directory** → **App registrations** → **+ New registration**
-3. Name: `Job CRM` (or similar)
-4. Under "Supported account types", select: **Accounts in any organizational directory and personal Microsoft accounts**
-5. Leave Redirect URI blank for now (device flow doesn't use it)
-6. Click **Register**
-7. Go to **Certificates & secrets** → **+ New client secret**
-   - Description: `Job CRM local`
-   - Expiration: 24 months (or your preference)
-   - Copy the **Client ID** from the Overview page
-   - Copy the **Client Secret** value (not the Secret ID)
-8. Go to **API Permissions** → **Add a permission**
-   - Select **Microsoft Graph** → **Delegated permissions**
-   - Search for and check `Mail.Read`
-   - Click **Add permissions**
-9. Add to `.env`:
-   ```
-   MS_GRAPH_CLIENT_ID=your_client_id
-   MS_GRAPH_CLIENT_SECRET=your_client_secret
-   MS_GRAPH_USERNAME=your_outlook_email@outlook.com
-   MS_GRAPH_PASSWORD=your_outlook_password
-   ```
-
-> ⚠️ **Security note:** These credentials are for local use only. Never commit `.env` to version control. Add `.env` to `.gitignore` (already done).
-
-### 2. Google Gemini API (for AI classification)
-
-**Steps:**
-1. Go to [ai.google.dev](https://ai.google.dev)
-2. Click "Get API Key"
-3. Create a new API key
-4. Copy it and add to `.env`:
-   ```
-   GEMINI_API_KEY=your_api_key
-   ```
-
-## Running the App
-
-### Terminal 1 (Backend - port 5000)
-```bash
-source venv/bin/activate  # Activate virtual environment
-cd backend
-python app.py
-```
-
-You should see:
-```
-Running on http://127.0.0.1:5000
-APScheduler initialized with daily 2 AM sync job
-```
-
-### Terminal 2 (Frontend - port 3000)
-```bash
+# Start dev server
 cd frontend
 npm run dev
 ```
 
-You should see:
+Then **open http://localhost:5173 in your browser**.
+
+### Environment Variables
+
+The Firebase config is already in `frontend/src/firebase.js`. No `.env` needed for local dev—sign-in will work.
+
+## 📖 How to Use
+
+### 1. Sign In
+Click **"Sign in with Google"** on the login page. You'll be asked to authenticate once.
+
+### 2. Dashboard (Kanban Board)
+- Drag cards between 5 columns (Submitted → Phone Screening → ... → 3rd Round)
+- Click a card to see details (company, role, applied date, target salary)
+- Hover to reveal: location, work arrangement, interview prep button
+- Click **+ New** to add a new application
+
+### 3. Application Details
+Click a card to open the detail panel:
+- **Company & Role** — centered, high contrast
+- **Applied Date & Status** — timestamp and current stage
+- **Salary Range** — min-max and negotiation target
+- **Interview Prep Button** — jump to prep for this application
+
+### 4. Interview Prep
+Go to **Interview Prep** tab to:
+- Upload a `.md` file with company research (format: markdown)
+- Research is auto-parsed and displayed
+- Generate interview questions from your research
+- Track multiple applications' prep side-by-side
+
+### 5. Settings
+**Coming soon** — currently a placeholder
+
+## 🗂 Data Structure (Firestore)
+
 ```
-VITE v5.4.21  ready in xxx ms
-
-➜  Local:   http://localhost:3000/
-```
-
-Then **open http://localhost:3000 in your browser**.
-
-## How It Works
-
-### Kanban Board (Dashboard)
-
-The main view shows your applications in a 5-column kanban:
-- **Submitted** — Applications you've just sent
-- **More Info Required** — Waiting on additional info from you
-- **Interview Started** — In active interview process
-- **Denied** — Rejection received
-- **Offered** — Offer received
-
-**Drag and drop** cards between columns to update status. Changes sync to the backend immediately.
-
-### Email Syncing
-
-**Daily at 2 AM (or manually via Settings → Run Sync Now):**
-1. Fetch last 7 days of emails from your Outlook inbox
-2. For each email, classify with Gemini AI
-3. Link to applications based on:
-   - **Domain match** (0.9 confidence) — email domain matches company domain
-   - **Keyword match** (0.7 confidence) — company name or keywords in subject/body
-   - **Semantic match** (variable) — AI-powered similarity
-4. Ambiguous matches go to **Unlinked Emails Tray** for manual linking
-
-### Unlinked Emails Tray
-
-At the bottom of the dashboard, you'll see unlinked emails. Click to search for an application and assign the email. The email will then appear in the application's detail panel.
-
-### Application Details
-
-Click any card to open the detail panel. You'll see:
-- **Emails tab** — All emails linked to this application
-- **Interactions tab** — Phone calls, texts, notes (chronologically ordered)
-- **Add Note tab** — Record interactions (calls, texts, manual notes)
-
-## Architecture
-
-The system uses a **three-role multi-agent architecture** for maintenance and development. See [CLAUDE.md](CLAUDE.md) for details on:
-- **PM Mode** — Project management and health reviews
-- **Dev Mode** — Autonomous task execution
-- **CEO Mode** — Strategic decisions and oversight
-
-## Database Schema
-
-6 tables (SQLite with WAL mode for concurrent access):
-- **applications** — Job applications with status
-- **emails** — Synced emails with classification and linking
-- **interactions** — Phone calls, texts, manual notes
-- **stage_suggestions** — AI suggestions for status changes
-- **processed_emails** — Dedup tracking (prevent re-processing)
-- **sync_logs** — History of sync runs
-
-See `backend/models.py` for the full schema.
-
-## 🔧 Troubleshooting
-
-### Setup Issues
-
-#### "No module named 'models'" or Import errors
-**Solution:** Ensure virtual environment is activated and dependencies are installed.
-```bash
-source venv/bin/activate  # or: venv\Scripts\activate on Windows
-pip install -r backend/requirements.txt
-python3 -c "import models" # Test import
+users/{userId}/
+  ├── applications/{appId}
+  │   ├── company_name: string
+  │   ├── job_title: string
+  │   ├── status: enum (Submitted, Phone Screening, 1st Round, 2nd Round, 3rd Round, Archived)
+  │   ├── date_submitted: date
+  │   ├── salary_min, salary_max, salary_negotiation_target: number
+  │   ├── job_location, work_arrangement: string
+  │   └── ...
+  │
+  ├── interviewPrep/{appId}
+  │   ├── company_research: text (markdown)
+  │   ├── interview_questions: array of strings
+  │   └── updated_at: timestamp
+  │
+  └── settings/ (future)
 ```
 
-#### "Connection refused" (can't reach localhost:5000 or 3000)
-**Cause:** Port is already in use or service didn't start.
-```bash
-# Check what's using the port
-lsof -i :5000  # macOS/Linux
-netstat -ano | findstr :5000  # Windows
+Each user only sees their own data—enforced by Firestore security rules.
 
-# Either kill the process or use a different port
-FLASK_PORT=5001 python backend/app.py
-```
+## 🔒 Security
 
-#### "ModuleNotFoundError: No module named 'flask'" or other dependency errors
-**Solution:** Reinstall dependencies:
-```bash
-pip install --upgrade pip
-pip install -r backend/requirements.txt
-```
+- **Google Sign-In Only** — No passwords, no email/password attacks
+- **Row-Level Security** — Firestore rules ensure users only access their own data
+- **HTTPS** — All traffic encrypted (Firebase Hosting)
+- **No Backend** — Data stored directly in Firestore; no custom server to attack
 
-### Authentication Issues
+## 🚢 Deployment
 
-#### "Device code verification failed" or "Invalid client"
-**Causes & solutions:**
-1. Client ID/Secret mismatch → Double-check `.env` against Azure Portal
-2. App not marked as public client → In Azure: **Manifest** → change `"allowPublicClient": true`
-3. Redirect URI mismatch → Device flow doesn't require redirect URI; if you set one, it can conflict
-4. Account type wrong → Ensure app registration allows **personal Microsoft accounts**
+### Frontend to Firebase Hosting
 
-**Debug:** Check logs in the Settings page → "Gemini Health" panel. Click to verify API keys are valid.
-
-#### "AADSTS70002: Client not marked as mobile/public"
-**Solution:** In Azure Portal, go to **Manifest** and set:
-```json
-"allowPublicClient": true,
-"isFallbackPublicClient": true
-```
-
-### Email Sync Issues
-
-#### "No emails synced" or "0 emails fetched"
-**Checklist:**
-1. Outlook account is connected → Settings page should show green indicator
-2. Device code flow completed → Allowed the app in Microsoft's device login screen
-3. MS_GRAPH_CLIENT_ID is correct → Compare with Azure Portal
-4. Email exists in Outlook inbox from the last 30 days (configurable via `EMAIL_SYNC_DAYS_BACK`)
-
-**Debug:** Check backend logs for "Fetched 0 emails" messages.
-
-#### "Pagination errors" or duplicate emails
-**Solution:** This is fixed in latest version. If you see pagination errors:
-```bash
-git pull origin main
-```
-
-#### "Rate limit exceeded" on Gemini API
-**Cause:** Free tier limit is ~60 requests/minute.
-**Solution:**
-- Wait 5 minutes before next sync
-- Add billing to your Google account for higher limits
-- Configure sync frequency in Settings
-
-### Database Issues
-
-#### "Database is locked" or SQLite corruption
-**Solution:** Reset the database by removing WAL files:
-```bash
-rm jobs.db jobs.db-wal jobs.db-shm
-python3 backend/models.py  # Recreate empty DB
-```
-
-#### "Disk I/O error"
-**Cause:** SQLite DB might be on a network drive with latency.
-**Solution:** Move DB to local drive:
-```bash
-# In .env
-DATABASE_PATH=./jobs.db  # Ensure it's a local path, not /mnt or SMB share
-```
-
-### Frontend Issues
-
-#### CSS not loading or components unstyled
-**Solution:** Vite dev server not running or build assets corrupted:
 ```bash
 cd frontend
-npm run dev  # Restart dev server
-# or for production build:
 npm run build
-npm run preview
+firebase deploy --only hosting
 ```
 
-#### "Cannot POST /api/..." (API calls failing)
-**Debug:** Check that backend is running on the correct port:
-```bash
-curl http://localhost:5001/health  # Backend healthcheck
-```
-If fails, restart backend. Check VITE_API_BASE in frontend/.env matches backend port.
+Or trigger automatic deployment:
+1. Push to `main` branch on GitHub
+2. GitHub Actions runs `npm run build`
+3. Firebase Hosting auto-deploys the `dist/` folder
 
-### Performance Issues
+### Environment Variables (Production)
 
-#### "Sync is very slow" (processing 100+ emails takes >10 min)
-**Profile & optimize:**
-1. Check Gemini health → Settings → "Gemini Health" button
-2. Monitor Gemini rate limit → Check logs for "rate limit" messages
-3. Reduce sync frequency → Settings → Configure auto-sync schedule
-4. Profile with 100 emails first → `EMAIL_SYNC_DAYS_BACK=1` in `.env`
+No backend to configure. Firebase config is in the code. Sign-in works globally.
 
-**Expected:** ~1–2 emails per second (varies with Gemini latency)
+## 🧪 Testing
 
-#### Frontend Kanban sluggish with 500+ applications
-**Solution:** Feature coming in Phase 5 (task virtualization). For now:
-- Archive old applications or split into separate CRM instances
-- Use search/filter to reduce visible cards
+### Manual Testing Checklist
 
-## File Structure
+- [ ] Sign in with Google
+- [ ] Create a new application
+- [ ] Drag card between columns
+- [ ] Click card to view details
+- [ ] Hover card to see extra info
+- [ ] Upload `.md` file to Interview Prep
+- [ ] Generate interview questions
+- [ ] Delete an interview prep session
+- [ ] Sign out and back in—your data persists
+- [ ] Open on different browser/device—data syncs
+
+### Browser Support
+
+- Chrome 90+
+- Firefox 88+
+- Safari 14+
+- Edge 90+
+
+## 📁 File Structure
 
 ```
 JobAppCRM/
-├── backend/
-│   ├── app.py                 # Flask API + scheduler
-│   ├── models.py              # SQLite schema + ORM methods
-│   ├── auth.py                # Microsoft OAuth2 PKCE
-│   ├── email_processor.py     # Email fetch/sync pipeline
-│   ├── gemini_classifier.py   # Email classification
-│   ├── application_linker.py  # Email-to-app matching
-│   ├── config.py              # Configuration + logging
-│   └── requirements.txt        # Python dependencies
 ├── frontend/
 │   ├── src/
-│   │   ├── App.jsx            # Main app + routing
-│   │   ├── KanbanBoard.jsx    # Drag-and-drop board
-│   │   ├── ApplicationCard.jsx # Card component
-│   │   ├── CardDetail.jsx     # Detail panel
-│   │   ├── AddInteraction.jsx # Add interaction modal
-│   │   ├── NewApplicationForm.jsx # New app form
-│   │   ├── UnlinkedEmailsTray.jsx # Unlinked emails panel
-│   │   ├── Settings.jsx       # Sync management
-│   │   └── api.js             # API client
-│   └── package.json           # Node dependencies
-├── tests/                     # Backend test suite
-├── setup.sh                   # One-command setup
-├── CLAUDE.md                  # Dev team documentation
-└── README.md                  # This file
+│   │   ├── App.jsx                    # Main app + routes
+│   │   ├── AuthContext.jsx            # Google auth + user state
+│   │   ├── Login.jsx                  # Sign-in page
+│   │   ├── firebase.js                # Firebase config
+│   │   ├── KanbanBoard.jsx            # Drag-and-drop board
+│   │   ├── ApplicationCard.jsx        # Card with 3D styling
+│   │   ├── CardDetail.jsx             # Detail panel
+│   │   ├── InterviewPrepPage.jsx      # Research + questions
+│   │   ├── InterviewPrepHistory.jsx   # Prep sessions list
+│   │   ├── Settings.jsx               # Settings (placeholder)
+│   │   ├── NewApplicationForm.jsx     # Create app modal
+│   │   ├── PromptTemplateModal.jsx    # Research prompt editor
+│   │   ├── api.js                     # API client (legacy)
+│   │   └── index.css                  # Tailwind + custom styles
+│   ├── public/
+│   │   └── favicon.svg                # Pipeline icon
+│   ├── vite.config.js                 # Vite config
+│   ├── tailwind.config.js             # Tailwind setup
+│   ├── package.json                   # Dependencies
+│   └── index.html                     # Entry point
+│
+├── .github/workflows/                 # CI/CD (if needed)
+├── CLAUDE.md                          # Dev architecture
+├── DEPLOYMENT.md                      # Deploy guides
+├── README.md                          # This file
+└── .gitignore
 ```
 
-## Performance Notes
+## 🔧 Troubleshooting
 
-- **SQLite WAL mode** enables concurrent reads while writes happen
-- **Rate limiter** (1 req/sec) on Gemini API to stay within free tier
-- **Optimistic UI updates** in kanban for instant feedback
-- **Automatic revert** if network errors occur
+### Sign-in Not Working
+- Clear browser cookies/cache
+- Ensure you have a Google account
+- Check Firebase console → Authentication → Google provider enabled
 
-## Contributing
+### Data Not Persisting
+- Ensure you're signed in (check browser Storage → Application → Firebase)
+- Check Firebase console → Firestore → see if documents are being created
+- Check browser console for errors (F12 → Console tab)
 
-This project uses an **autonomous agent architecture** for development:
+### Cards Not Dragging
+- Ensure JavaScript is enabled
+- Try a different browser
+- Clear cache and reload
 
-1. **PM Review** — Check project health and recommend work
-   ```bash
-   /pm review current state
-   ```
+### Interview Prep Upload Failed
+- Ensure `.md` file is valid markdown
+- Check file is under 1MB
+- See browser console for error details
 
-2. **Dev Execution** — Work on specific tasks autonomously
-   ```bash
-   /dev TASK-001
-   ```
+## 🛣 Roadmap
 
-3. **CEO Approval** — Make strategic decisions and approve work
+- [ ] Email sync integration (Microsoft Graph API)
+- [ ] Auto-classification of emails (Claude AI)
+- [ ] Stage suggestions based on interactions
+- [ ] Settings page (themes, notifications)
+- [ ] Export to CSV
+- [ ] Mobile app (React Native)
 
-See [CLAUDE.md](CLAUDE.md) for the full role structure and workflow.
+## 📝 Contributing
 
-## License
+This is a personal project with an autonomous agent dev workflow. See [CLAUDE.md](CLAUDE.md) for architecture.
 
-Personal project — use as you like.
+To contribute:
+1. Fork the repo
+2. Create a feature branch
+3. Make changes
+4. Submit a pull request
 
-## Support
+## 📧 Support
 
-Check the Troubleshooting section above, or review the console logs in `logs/` directory.
+For issues, check the Troubleshooting section above or open a GitHub Issue.
 
 ---
 
-**Happy job hunting!** 🚀
+**Built with ❤️ for job searchers.**
+
+Deploy to Firebase Hosting: `firebase deploy`  
+Start local dev: `cd frontend && npm run dev`
