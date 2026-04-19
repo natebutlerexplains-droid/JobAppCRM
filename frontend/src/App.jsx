@@ -99,8 +99,69 @@ function App() {
     <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 flex flex-col" style={{ fontFamily: 'system-ui, -apple-system, sans-serif', overflow: 'hidden', scrollbarGutter: 'stable' }}>
       {/* Header - Slim */}
       <header className="border-b border-slate-800 bg-slate-900/50 backdrop-blur-xl sticky top-0 z-30 flex-shrink-0">
-        <div className="w-full px-8 py-4">
-          <div className="flex items-center justify-center relative">
+        <div className="w-full px-4 sm:px-8 py-3 sm:py-4">
+          {/* Mobile layout */}
+          <div className="block sm:hidden">
+            <div className="flex items-center justify-between mb-3">
+              <button
+                onClick={() => setCurrentPage('dashboard')}
+                className="text-xl font-black uppercase hover:opacity-80 transition-opacity"
+                style={{ letterSpacing: '1px', color: '#3b82f6' }}
+              >
+                →
+              </button>
+              <button
+                onClick={logout}
+                className="text-xs text-slate-400 hover:text-slate-200 uppercase transition-colors"
+              >
+                Logout
+              </button>
+            </div>
+            <div className="flex gap-2 overflow-x-auto">
+              <button
+                onClick={() => setCurrentPage('dashboard')}
+                className={`text-xs font-bold uppercase whitespace-nowrap pb-1 border-b-2 transition-colors ${
+                  currentPage === 'dashboard'
+                    ? 'text-blue-400 border-blue-400'
+                    : 'text-slate-500 border-transparent'
+                }`}
+              >
+                Dashboard
+              </button>
+              <button
+                onClick={() => setCurrentPage('interview-prep')}
+                className={`text-xs font-bold uppercase whitespace-nowrap pb-1 border-b-2 transition-colors ${
+                  currentPage === 'interview-prep'
+                    ? 'text-blue-400 border-blue-400'
+                    : 'text-slate-500 border-transparent'
+                }`}
+              >
+                Prep
+              </button>
+              <button
+                onClick={() => setCurrentPage('settings')}
+                className={`text-xs font-bold uppercase whitespace-nowrap pb-1 border-b-2 transition-colors ${
+                  currentPage === 'settings'
+                    ? 'text-blue-400 border-blue-400'
+                    : 'text-slate-500 border-transparent'
+                }`}
+              >
+                Settings
+              </button>
+            </div>
+            {currentPage === 'dashboard' && (
+              <button
+                onClick={() => setShowNewAppForm(true)}
+                className="w-full mt-3 px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs transition-colors"
+                style={{ borderRadius: '4px' }}
+              >
+                + New Application
+              </button>
+            )}
+          </div>
+
+          {/* Desktop layout */}
+          <div className="hidden sm:flex items-center justify-center relative">
             {/* Logo - Left (absolute) */}
             <button
               onClick={() => setCurrentPage('dashboard')}
