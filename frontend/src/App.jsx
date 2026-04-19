@@ -117,7 +117,7 @@ function App() {
                 Logout
               </button>
             </div>
-            <div className="flex gap-2 overflow-x-auto">
+            <div className="flex gap-2 overflow-x-auto justify-center">
               <button
                 onClick={() => setCurrentPage('dashboard')}
                 className={`text-xs font-bold uppercase whitespace-nowrap pb-1 border-b-2 transition-colors ${
