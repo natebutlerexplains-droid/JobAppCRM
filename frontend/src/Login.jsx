@@ -39,7 +39,7 @@ export function Login() {
         {/* Logo */}
         <div className="text-center mb-8 sm:mb-12">
           <h1 className="text-3xl sm:text-5xl font-black uppercase text-white flex items-center justify-center gap-2" style={{ letterSpacing: '3px' }}>
-            <span style={{ color: '#3b82f6', fontSize: '2.5rem' }}>→</span>
+            <span className="text-3xl sm:text-5xl" style={{ color: '#3b82f6' }}>→</span>
             <span>PIPELINE</span>
           </h1>
           <p className="text-slate-400 text-sm sm:text-base mt-2">Track. Manage. Land.</p>

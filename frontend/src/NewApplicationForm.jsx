@@ -81,7 +81,7 @@ export function NewApplicationForm({ isOpen, onClose, onSuccess }) {
 
   if (!isOpen) return null
 
-  const inputClass = "w-full px-3 py-2 bg-slate-800 border border-slate-600 text-white text-sm focus:outline-none focus:border-blue-500"
+  const inputClass = "w-full px-3 py-3 bg-slate-800 border border-slate-600 text-white text-sm focus:outline-none focus:border-blue-500"
 
   return (
     <>
@@ -162,7 +162,7 @@ export function NewApplicationForm({ isOpen, onClose, onSuccess }) {
             <div className="border-t border-slate-700 pt-5 space-y-4">
               <p className="text-xs font-bold text-slate-400 uppercase">Compensation</p>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-bold text-slate-400 mb-1.5 uppercase">Employment Type</label>
                   <select value={formData.employment_type} onChange={set('employment_type')}
@@ -186,7 +186,7 @@ export function NewApplicationForm({ isOpen, onClose, onSuccess }) {
 
               {formData.pay_type && (
                 <div className="space-y-3">
-                  <div className="grid grid-cols-2 gap-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div>
                       <label className="block text-xs font-bold text-slate-400 mb-1.5 uppercase">
                         {isHourly ? 'Min Rate ($/hr)' : 'Min Salary'}

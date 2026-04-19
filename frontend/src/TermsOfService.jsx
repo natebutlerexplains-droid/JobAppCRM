@@ -8,7 +8,7 @@ export function TermsOfService({ isOpen, onClose }) {
           <h2 className="text-2xl font-bold text-white">Terms of Service</h2>
           <button
             onClick={onClose}
-            className="text-slate-400 hover:text-slate-200 text-2xl font-bold"
+            className="p-2 text-slate-400 hover:text-slate-200 text-2xl font-bold"
           >
             ✕
           </button>

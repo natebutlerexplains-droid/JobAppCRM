@@ -99,8 +99,8 @@ export function InterviewPrepHistory({ onSelectApp }) {
             <div
               key={session.id}
               onClick={() => handleSessionClick(session)}
-              className="p-4 bg-slate-800 border border-slate-700 hover:border-blue-500 cursor-pointer transition-all duration-200 hover:bg-slate-750 flex-shrink-0"
-              style={{ borderRadius: '8px', width: '280px' }}
+              className="p-4 bg-slate-800 border border-slate-700 hover:border-blue-500 cursor-pointer transition-all duration-200 hover:bg-slate-750 flex-shrink-0 w-full sm:w-[280px]"
+              style={{ borderRadius: '8px' }}
             >
               <div className="flex items-start justify-between gap-2">
                 <div className="flex-1">
@@ -113,7 +113,7 @@ export function InterviewPrepHistory({ onSelectApp }) {
                 </div>
                 <button
                   onClick={(e) => handleDelete(e, session)}
-                  className="p-1 text-slate-500 hover:text-red-400 transition-colors flex-shrink-0"
+                  className="p-2 text-slate-500 hover:text-red-400 transition-colors flex-shrink-0"
                   title="Delete interview prep"
                 >
                   <Trash2 className="w-4 h-4" />

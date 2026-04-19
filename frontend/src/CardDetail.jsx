@@ -93,7 +93,7 @@ export function CardDetail({ application, isOpen, onClose, onSave, onNavToInterv
         <div className="bg-slate-900 border border-slate-700 max-w-2xl w-full max-h-[90vh] overflow-y-auto" style={{ borderRadius: '0px' }}>
 
           {/* Header */}
-          <div className="sticky top-0 bg-slate-900 border-b border-slate-700 p-6 flex justify-between items-start">
+          <div className="sticky top-0 bg-slate-900 border-b border-slate-700 p-4 sm:p-6 flex justify-between items-start">
             <div>
               <h2 className="text-2xl font-black uppercase text-white" style={{ letterSpacing: '1px' }}>
                 {isEditing ? 'Edit Application' : application.company_name}
@@ -243,11 +243,11 @@ export function CardDetail({ application, isOpen, onClose, onSave, onNavToInterv
 
                 <div className="flex gap-3 pt-2">
                   <button onClick={handleSave} disabled={saving}
-                    className="flex-1 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold uppercase text-sm transition-colors disabled:opacity-50" style={{ borderRadius: '0px' }}>
+                    className="flex-1 px-4 py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold uppercase text-sm transition-colors disabled:opacity-50" style={{ borderRadius: '0px' }}>
                     {saving ? 'Saving...' : '✓ Save Changes'}
                   </button>
                   <button onClick={() => { setIsEditing(false); setEditData({ ...application }) }}
-                    className="flex-1 px-4 py-2.5 bg-slate-700 hover:bg-slate-600 text-white font-bold uppercase text-sm transition-colors" style={{ borderRadius: '0px' }}>
+                    className="flex-1 px-4 py-3 bg-slate-700 hover:bg-slate-600 text-white font-bold uppercase text-sm transition-colors" style={{ borderRadius: '0px' }}>
                     Cancel
                   </button>
                 </div>

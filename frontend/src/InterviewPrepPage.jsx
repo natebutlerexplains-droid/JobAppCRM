@@ -382,14 +382,14 @@ ${companyResearch?.hiring_focus || 'N/A'}`
       <PromptTemplateModal isOpen={showPromptModal} onClose={() => setShowPromptModal(false)} />
 
       {/* Header with back button and save button in top right */}
-      <div className="flex justify-between items-start gap-4">
+      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-4">
         <div>
           <h1 className="text-3xl font-black uppercase text-white" style={{ letterSpacing: '1px' }}>
             Interview Prep
           </h1>
           <p className="text-slate-400 text-sm mt-1 font-medium">{application.company_name} • {application.job_title}</p>
         </div>
-        <div className="flex gap-2 flex-wrap justify-end">
+        <div className="flex gap-2 flex-wrap justify-end sm:justify-end">
           <button
             onClick={handleSaveChanges}
             disabled={isSaving || Object.keys(editedFields).length === 0}
@@ -746,7 +746,7 @@ ${companyResearch?.hiring_focus || 'N/A'}`
             }))
             setHasUnsavedChanges(true)
           }}
-          className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs uppercase transition-colors"
+          className="px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs uppercase transition-colors"
           style={{ borderRadius: '0px' }}
         >
           + Add Person
