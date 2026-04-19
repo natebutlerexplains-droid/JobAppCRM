@@ -55,14 +55,14 @@ export function Login() {
 
           {/* Terms Agreement Checkbox */}
           <div className="mb-6 p-3 sm:p-4 bg-slate-800/50 border border-slate-700 rounded-lg">
-            <label className="flex items-start gap-2 cursor-pointer">
+            <label className="flex items-center justify-center gap-2 cursor-pointer">
               <input
                 type="checkbox"
                 checked={agreeToTerms}
                 onChange={(e) => setAgreeToTerms(e.target.checked)}
-                className="mt-1 accent-blue-500"
+                className="accent-blue-500"
               />
-              <span className="text-xs sm:text-sm text-slate-300 leading-relaxed">
+              <span className="text-xs sm:text-sm text-slate-300 leading-relaxed text-center">
                 I agree to the{' '}
                 <button
                   onClick={(e) => {
