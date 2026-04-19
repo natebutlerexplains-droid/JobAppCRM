@@ -1841,7 +1841,7 @@ if __name__ == "__main__":
 
         # Run Flask app with use_reloader=False to avoid double-scheduling
         app.run(
-            host="localhost",
+            host="0.0.0.0",
             port=Config.FLASK_PORT,
             debug=Config.FLASK_DEBUG,
             use_reloader=False,
