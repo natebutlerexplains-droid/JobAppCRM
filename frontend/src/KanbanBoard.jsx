@@ -115,7 +115,6 @@ function KanbanColumn({ column, items, suggestions = [], onCardClick, onDelete, 
 }
 
 export function KanbanBoard({ applications, onCardClick, onApplicationsChange, onNavToInterview, userId }) {
-  const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
   const [activeId, setActiveId] = useState(null)
   const [prepModalApp, setPrepModalApp] = useState(null)
@@ -184,24 +183,18 @@ export function KanbanBoard({ applications, onCardClick, onApplicationsChange, o
 
     if (app.status === 'Archived') {
       if (!window.confirm('Permanently delete this application?')) return
-      setLoading(true)
       try {
         await deleteApplication(userId, appId)
         onApplicationsChange(applications.filter(a => a.id !== appId))
       } catch (err) {
         setError(`Failed to delete: ${err.message}`)
-      } finally {
-        setLoading(false)
       }
     } else {
-      setLoading(true)
       try {
         await updateApplication(userId, appId, { status: 'Archived' })
         onApplicationsChange(applications.map(a => a.id === appId ? { ...a, status: 'Archived' } : a))
       } catch (err) {
         setError(`Failed to archive: ${err.message}`)
-      } finally {
-        setLoading(false)
       }
     }
   }
