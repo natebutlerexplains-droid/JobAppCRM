@@ -24,7 +24,7 @@ app = Flask(__name__)
 app.config["JSON_SORT_KEYS"] = False
 app.config["MAX_CONTENT_LENGTH"] = 16 * 1024 * 1024  # 16MB max
 
-# CORS: Only allow localhost in dev
+# CORS: Allow localhost dev and production Vercel domain
 CORS(app, resources={
     r"/api/*": {
         "origins": [
@@ -51,7 +51,8 @@ CORS(app, resources={
             "http://127.0.0.1:3008",
             "http://127.0.0.1:3009",
             "http://127.0.0.1:3010",
-            "http://127.0.0.1:3307"
+            "http://127.0.0.1:3307",
+            "https://job-app-crm.vercel.app"
         ],
         "methods": ["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
         "allow_headers": ["Content-Type"],
